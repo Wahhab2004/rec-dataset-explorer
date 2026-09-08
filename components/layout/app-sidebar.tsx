@@ -25,7 +25,7 @@ type NavigationItem = {
 };
 
 const navigationItems: NavigationItem[] = [
-  { label: "Datasets", href: "/", icon: Database },
+  { label: "Datasets", href: "/datasets", icon: Database },
   { label: "Upload Dataset", href: "/upload", icon: Upload },
 ];
 
