@@ -1,32 +1,17 @@
 import { DatasetList } from "@/components/datasets/dataset-list";
 import type { DatasetSummary } from "@/components/datasets/dataset-card";
+import { mockDatasets } from "@/lib/mock-data/datasets";
 
-const datasets: DatasetSummary[] = [
-  {
-    id: "bdd100k-demo",
-    name: "BDD100K Demo",
-    imageCount: 70_000,
-    annotationFormat: "YOLO",
+const datasets: DatasetSummary[] = mockDatasets.map(
+  ({ id, name, imageCount, annotationFormat, updatedAt }) => ({
+    id,
+    name,
+    imageCount,
+    annotationFormat,
+    updatedAt,
     status: "Ready",
-    updatedAt: "2026-09-08",
-  },
-  {
-    id: "rec-front-camera-dataset",
-    name: "REC Front Camera Dataset",
-    imageCount: 15_320,
-    annotationFormat: "YOLO",
-    status: "Ready",
-    updatedAt: "2026-09-07",
-  },
-  {
-    id: "cityscapes-subset",
-    name: "Cityscapes Subset",
-    imageCount: 5_200,
-    annotationFormat: "YOLO",
-    status: "Ready",
-    updatedAt: "2026-09-05",
-  },
-];
+  }),
+);
 
 export default function DatasetsPage() {
   return (

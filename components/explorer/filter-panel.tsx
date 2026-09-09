@@ -1,8 +1,44 @@
+"use client";
+
 import { AnnotationLevelFilters } from "@/components/explorer/annotation-level-filters";
 import { ImageLevelFilters } from "@/components/explorer/image-level-filters";
 import { Button } from "@/components/ui/button";
+import {
+  areDatasetFiltersValid,
+  type AnnotationLevelFilterState,
+  type DatasetFilters,
+  type ImageLevelFilterState,
+} from "@/lib/dataset-filtering";
 
-export function FilterPanel() {
+type FilterPanelProps = {
+  filters: DatasetFilters;
+  categorySearch: string;
+  onCategorySearchChange: (value: string) => void;
+  onFiltersChange: (filters: DatasetFilters) => void;
+  onApply: () => void;
+  onReset: () => void;
+};
+
+export function FilterPanel({
+  filters,
+  categorySearch,
+  onCategorySearchChange,
+  onFiltersChange,
+  onApply,
+  onReset,
+}: FilterPanelProps) {
+  const filtersAreValid = areDatasetFiltersValid(filters);
+
+  function updateImageLevelFilters(nextFilters: ImageLevelFilterState) {
+    onFiltersChange({ ...filters, ...nextFilters });
+  }
+
+  function updateAnnotationLevelFilters(
+    nextFilters: AnnotationLevelFilterState,
+  ) {
+    onFiltersChange({ ...filters, ...nextFilters });
+  }
+
   return (
     <aside
       aria-labelledby="filter-panel-title"
@@ -17,7 +53,7 @@ export function FilterPanel() {
             Refine the current dataset.
           </p>
         </div>
-        <Button type="button" variant="ghost" size="xs">
+        <Button type="button" variant="ghost" size="xs" onClick={onReset}>
           Reset Filters
         </Button>
       </header>
@@ -35,7 +71,10 @@ export function FilterPanel() {
               Image-Level Filters
             </h3>
           </div>
-          <ImageLevelFilters />
+          <ImageLevelFilters
+            filters={filters}
+            onChange={updateImageLevelFilters}
+          />
         </section>
 
         <section aria-labelledby="annotation-level-filter-title" className="p-3">
@@ -53,12 +92,34 @@ export function FilterPanel() {
               Annotation-Level Filters
             </h3>
           </div>
-          <AnnotationLevelFilters />
+          <AnnotationLevelFilters
+            filters={filters}
+            categorySearch={categorySearch}
+            onCategorySearchChange={onCategorySearchChange}
+            onChange={updateAnnotationLevelFilters}
+          />
         </section>
       </div>
 
       <footer className="border-t p-3">
-        <Button type="button" className="w-full">
+        {!filtersAreValid ? (
+          <p
+            id="filter-validation-message"
+            role="alert"
+            className="mb-2 text-[11px] text-destructive"
+          >
+            Use whole counts of 0 or more and box values from 0 to 1.
+          </p>
+        ) : null}
+        <Button
+          type="button"
+          onClick={onApply}
+          disabled={!filtersAreValid}
+          aria-describedby={
+            filtersAreValid ? undefined : "filter-validation-message"
+          }
+          className="w-full"
+        >
           Apply Filters
         </Button>
       </footer>

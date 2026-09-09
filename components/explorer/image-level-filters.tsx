@@ -1,9 +1,42 @@
+"use client";
+
 import { Input } from "@/components/ui/input";
+import {
+  INSTALLATION_LOCATION_OPTIONS,
+  TIME_OF_DAY_OPTIONS,
+  WEATHER_OPTIONS,
+  type ImageLevelFilterState,
+} from "@/lib/dataset-filtering";
+
+type ImageLevelFiltersProps = {
+  filters: ImageLevelFilterState;
+  onChange: (filters: ImageLevelFilterState) => void;
+};
 
 const selectClassName =
   "h-8 w-full rounded-lg border border-input bg-background px-2.5 text-sm text-foreground outline-none transition-colors focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50";
 
-export function ImageLevelFilters() {
+function normalizeTags(tags: readonly string[]) {
+  const normalizedTags: string[] = [];
+  const seenTags = new Set<string>();
+
+  for (const tag of tags) {
+    const trimmedTag = tag.trim();
+    const tagKey = trimmedTag.toLowerCase();
+
+    if (tagKey !== "" && !seenTags.has(tagKey)) {
+      seenTags.add(tagKey);
+      normalizedTags.push(trimmedTag);
+    }
+  }
+
+  return normalizedTags;
+}
+
+export function ImageLevelFilters({
+  filters,
+  onChange,
+}: ImageLevelFiltersProps) {
   return (
     <div className="space-y-3">
       <div className="space-y-1.5">
@@ -13,12 +46,22 @@ export function ImageLevelFilters() {
         <select
           id="filter-time-of-day"
           name="timeOfDay"
-          defaultValue="Nighttime"
+          value={filters.timeOfDay}
+          onChange={(event) =>
+            onChange({
+              ...filters,
+              timeOfDay: event.target
+                .value as ImageLevelFilterState["timeOfDay"],
+            })
+          }
           className={selectClassName}
         >
           <option value="">Any time</option>
-          <option value="Daytime">Daytime</option>
-          <option value="Nighttime">Nighttime</option>
+          {TIME_OF_DAY_OPTIONS.map((option) => (
+            <option key={option} value={option}>
+              {option}
+            </option>
+          ))}
         </select>
       </div>
 
@@ -29,15 +72,21 @@ export function ImageLevelFilters() {
         <select
           id="filter-weather"
           name="weather"
-          defaultValue="Rainy"
+          value={filters.weather}
+          onChange={(event) =>
+            onChange({
+              ...filters,
+              weather: event.target.value as ImageLevelFilterState["weather"],
+            })
+          }
           className={selectClassName}
         >
           <option value="">Any weather</option>
-          <option value="Sunny">Sunny</option>
-          <option value="Cloudy">Cloudy</option>
-          <option value="Rainy">Rainy</option>
-          <option value="Foggy">Foggy</option>
-          <option value="Other">Other</option>
+          {WEATHER_OPTIONS.map((option) => (
+            <option key={option} value={option}>
+              {option}
+            </option>
+          ))}
         </select>
       </div>
 
@@ -51,13 +100,22 @@ export function ImageLevelFilters() {
         <select
           id="filter-installation-location"
           name="installationLocation"
-          defaultValue="Front"
+          value={filters.installationLocation}
+          onChange={(event) =>
+            onChange({
+              ...filters,
+              installationLocation: event.target
+                .value as ImageLevelFilterState["installationLocation"],
+            })
+          }
           className={selectClassName}
         >
           <option value="">Any position</option>
-          <option value="Front">Front</option>
-          <option value="Rear">Rear</option>
-          <option value="Side">Side</option>
+          {INSTALLATION_LOCATION_OPTIONS.map((option) => (
+            <option key={option} value={option}>
+              {option}
+            </option>
+          ))}
         </select>
       </div>
 
@@ -69,6 +127,10 @@ export function ImageLevelFilters() {
           id="filter-location"
           name="location"
           type="search"
+          value={filters.location}
+          onChange={(event) =>
+            onChange({ ...filters, location: event.target.value })
+          }
           placeholder="Search locations…"
           autoComplete="off"
         />
@@ -81,10 +143,30 @@ export function ImageLevelFilters() {
         <Input
           id="filter-image-tags"
           name="imageTags"
-          type="search"
-          placeholder="Search or add tags…"
+          type="text"
+          value={filters.tags.join(", ")}
+          onChange={(event) =>
+            onChange({
+              ...filters,
+              tags: event.target.value.split(/,\s?/),
+            })
+          }
+          onBlur={() =>
+            onChange({
+              ...filters,
+              tags: normalizeTags(filters.tags),
+            })
+          }
+          placeholder="urban, wet-road"
+          aria-describedby="filter-image-tags-help"
           autoComplete="off"
         />
+        <p
+          id="filter-image-tags-help"
+          className="text-[11px] text-muted-foreground"
+        >
+          Separate tags with commas.
+        </p>
       </div>
     </div>
   );

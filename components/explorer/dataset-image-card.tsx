@@ -1,15 +1,28 @@
 import { ImageIcon } from "lucide-react"
 
 import { Badge } from "@/components/ui/badge"
+import type { DatasetImage } from "@/lib/dataset-filtering"
 
-export type DatasetImage = {
-  id: string
-  filename: string
-  tags: string[]
-  annotationSummary: string
-}
+export type { DatasetImage } from "@/lib/dataset-filtering"
 
 export function DatasetImageCard({ image }: { image: DatasetImage }) {
+  const displayTags = Array.from(
+    new Set([
+      image.timeOfDay,
+      image.weather,
+      image.installationLocation,
+      ...image.tags,
+    ])
+  )
+  const categoryCounts = image.annotations.reduce((counts, annotation) => {
+    counts.set(annotation.category, (counts.get(annotation.category) ?? 0) + 1)
+    return counts
+  }, new Map<string, number>())
+  const annotationSummary =
+    Array.from(categoryCounts, ([category, count]) => `${category} ${count}`).join(
+      " \u00b7 "
+    ) || "No annotations"
+
   return (
     <article className="overflow-hidden rounded-lg border bg-card">
       <div className="relative grid aspect-[4/3] place-items-center border-b bg-muted/70">
@@ -30,9 +43,9 @@ export function DatasetImageCard({ image }: { image: DatasetImage }) {
         </h3>
 
         <div className="flex min-h-5 flex-wrap gap-1">
-          {image.tags.map((tag, index) => (
+          {displayTags.map((tag) => (
             <Badge
-              key={`${tag}-${index}`}
+              key={tag}
               variant="secondary"
               className="font-normal text-muted-foreground"
             >
@@ -41,9 +54,7 @@ export function DatasetImageCard({ image }: { image: DatasetImage }) {
           ))}
         </div>
 
-        <p className="text-xs text-muted-foreground">
-          {image.annotationSummary}
-        </p>
+        <p className="text-xs text-muted-foreground">{annotationSummary}</p>
       </div>
     </article>
   )
