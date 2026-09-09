@@ -1,0 +1,169 @@
+"use client";
+
+import { useState, type FormEvent } from "react";
+
+import { UploadDropzone } from "@/components/upload/upload-dropzone";
+import { UploadProgress } from "@/components/upload/upload-progress";
+import { UploadSuccess } from "@/components/upload/upload-success";
+import { UploadValidationError } from "@/components/upload/upload-validation-error";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+
+type UploadStage = "form" | "progress" | "success" | "error";
+
+export function DatasetUploadForm() {
+  const [datasetName, setDatasetName] = useState("");
+  const [description, setDescription] = useState("");
+  const [annotationFormat, setAnnotationFormat] = useState("YOLO");
+  const [files, setFiles] = useState<File[]>([]);
+  const [stage, setStage] = useState<UploadStage>("form");
+  const [errors, setErrors] = useState<string[]>([]);
+
+  function handleFilesChange(nextFiles: File[]) {
+    setFiles(nextFiles);
+    setErrors((currentErrors) =>
+      currentErrors.filter((error) => error !== "Select at least one dataset file or package."),
+    );
+  }
+
+  function handleSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const nextErrors: string[] = [];
+
+    if (datasetName.trim() === "") {
+      nextErrors.push("Dataset Name is required.");
+    }
+    if (annotationFormat === "") {
+      nextErrors.push("Annotation Format is required.");
+    }
+    if (files.length === 0) {
+      nextErrors.push("Select at least one dataset file or package.");
+    }
+
+    if (nextErrors.length > 0) {
+      setErrors(nextErrors);
+      return;
+    }
+
+    setErrors([]);
+    setStage("progress");
+  }
+
+  function resetForm() {
+    setDatasetName("");
+    setDescription("");
+    setAnnotationFormat("YOLO");
+    setFiles([]);
+    setErrors([]);
+    setStage("form");
+  }
+
+  function handleUploadComplete() {
+    const hasMockValidationProblem = files.some((file) =>
+      /invalid|error/i.test(file.name),
+    );
+    setStage(hasMockValidationProblem ? "error" : "success");
+  }
+
+  if (stage === "progress") {
+    return <UploadProgress onComplete={handleUploadComplete} />;
+  }
+
+  if (stage === "success") {
+    return <UploadSuccess datasetName={datasetName} onUploadAnother={resetForm} />;
+  }
+
+  if (stage === "error") {
+    return <UploadValidationError onTryAgain={() => setStage("form")} />;
+  }
+
+  return (
+    <form onSubmit={handleSubmit} className="space-y-6" noValidate>
+      <div className="grid gap-4 sm:grid-cols-2">
+        <div className="space-y-2 sm:col-span-2">
+          <label htmlFor="dataset-name" className="text-sm font-medium">
+            Dataset Name <span className="text-destructive">*</span>
+          </label>
+          <Input
+            id="dataset-name"
+            value={datasetName}
+            onChange={(event) => setDatasetName(event.target.value)}
+            placeholder="e.g. REC Front Camera Dataset"
+            aria-invalid={errors.some((error) => error.includes("Dataset Name"))}
+          />
+        </div>
+
+        <div className="space-y-2 sm:col-span-2">
+          <label htmlFor="dataset-description" className="text-sm font-medium">
+            Description <span className="font-normal text-muted-foreground">(optional)</span>
+          </label>
+          <textarea
+            id="dataset-description"
+            value={description}
+            onChange={(event) => setDescription(event.target.value)}
+            placeholder="Describe the dataset contents or intended use."
+            className="min-h-24 w-full resize-y rounded-lg border border-input bg-transparent px-2.5 py-2 text-sm outline-none transition-colors placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
+          />
+        </div>
+
+        <div className="space-y-2">
+          <label htmlFor="annotation-format" className="text-sm font-medium">
+            Annotation Format <span className="text-destructive">*</span>
+          </label>
+          <select
+            id="annotation-format"
+            value={annotationFormat}
+            onChange={(event) => setAnnotationFormat(event.target.value)}
+            className="h-8 w-full rounded-lg border border-input bg-background px-2.5 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
+          >
+            <option value="YOLO">YOLO</option>
+          </select>
+        </div>
+      </div>
+
+      <div className="space-y-3">
+        <div>
+          <h2 className="text-sm font-medium">Dataset Files <span className="text-destructive">*</span></h2>
+          <p className="mt-1 text-xs text-muted-foreground">
+            Include the prepared images, labels, and metadata structure.
+          </p>
+        </div>
+        <UploadDropzone files={files} onFilesChange={handleFilesChange} />
+      </div>
+
+      <div className="space-y-3 rounded-lg border bg-muted/20 p-4">
+        <div>
+          <h2 className="text-sm font-semibold">Expected dataset structure</h2>
+          <p className="mt-1 text-xs text-muted-foreground">
+            Please prepare the dataset according to the required structure before uploading.
+          </p>
+        </div>
+        <pre className="overflow-x-auto rounded-lg border bg-card p-3 font-mono text-xs leading-6 text-muted-foreground">{`dataset/
+├── images/
+│   ├── image_001.jpg
+│   └── image_002.jpg
+├── labels/
+│   ├── image_001.txt
+│   └── image_002.txt
+└── metadata/
+    └── metadata.json`}</pre>
+        <p className="text-xs text-muted-foreground">
+          The application does not automatically repair or prepare malformed datasets. Preparing the dataset correctly is the user&apos;s responsibility.
+        </p>
+      </div>
+
+      {errors.length > 0 ? (
+        <div role="alert" className="rounded-lg border border-destructive/30 bg-destructive/5 px-3 py-2.5 text-sm text-destructive">
+          <p className="font-medium">Please complete the required fields.</p>
+          <ul className="mt-1 list-disc pl-4">
+            {errors.map((error) => <li key={error}>{error}</li>)}
+          </ul>
+        </div>
+      ) : null}
+
+      <div className="flex justify-end border-t pt-4 ">
+        <Button type="submit" className="cursor-pointer">Upload Dataset</Button>
+      </div>
+    </form>
+  );
+}
