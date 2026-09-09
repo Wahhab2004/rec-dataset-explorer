@@ -5,9 +5,11 @@ import { Button } from "@/components/ui/button"
 export function SelectionToolbar({
   count,
   onClear,
+  onExport,
 }: {
   count: number
   onClear: () => void
+  onExport: () => void
 }) {
   return (
     <div className="sticky top-0 z-20 mb-3 flex flex-wrap items-center justify-between gap-3 rounded-lg border border-primary/20 bg-primary/5 px-3 py-2.5 shadow-sm backdrop-blur">
@@ -19,7 +21,7 @@ export function SelectionToolbar({
           <X data-icon="inline-start" />
           Clear Selection
         </Button>
-        <Button type="button" variant="outline" size="sm" disabled>
+        <Button type="button" variant="outline" size="sm" onClick={onExport}>
           <Download data-icon="inline-start" />
           Export Dataset
         </Button>

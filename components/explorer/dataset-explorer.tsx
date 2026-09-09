@@ -3,6 +3,7 @@
 import { useMemo, useState } from "react";
 import { Check, ChevronDown, Grid2X2, List } from "lucide-react";
 
+import { ExportDatasetModal } from "@/components/export/export-dataset-modal";
 import { ActiveFilterChips } from "@/components/explorer/active-filter-chips";
 import { ImageDetailDrawer } from "@/components/explorer/image-detail-drawer";
 import { FilterPanel } from "@/components/explorer/filter-panel";
@@ -22,9 +23,10 @@ import {
 
 type DatasetExplorerProps = {
   images: readonly DatasetImage[];
+  datasetName: string;
 };
 
-export function DatasetExplorer({ images }: DatasetExplorerProps) {
+export function DatasetExplorer({ images, datasetName }: DatasetExplorerProps) {
   const [draftFilters, setDraftFilters] = useState<DatasetFilters>(() =>
     createEmptyDatasetFilters(),
   );
@@ -36,6 +38,7 @@ export function DatasetExplorer({ images }: DatasetExplorerProps) {
     () => new Set(),
   );
   const [openImage, setOpenImage] = useState<DatasetImage | null>(null);
+  const [isExportOpen, setIsExportOpen] = useState(false);
 
   const filteredImages = useMemo(
     () => filterDatasetImages(images, appliedFilters),
@@ -203,6 +206,7 @@ export function DatasetExplorer({ images }: DatasetExplorerProps) {
             <SelectionToolbar
               count={selectedImageIds.size}
               onClear={handleClearSelection}
+              onExport={() => setIsExportOpen(true)}
             />
           ) : null}
 
@@ -237,6 +241,15 @@ export function DatasetExplorer({ images }: DatasetExplorerProps) {
         image={openImage}
         onClose={() => setOpenImage(null)}
       />
+
+      {isExportOpen ? (
+        <ExportDatasetModal
+          selectedCount={selectedImageIds.size}
+          datasetName={datasetName}
+          appliedFilters={appliedFilters}
+          onClose={() => setIsExportOpen(false)}
+        />
+      ) : null}
     </div>
   );
 }

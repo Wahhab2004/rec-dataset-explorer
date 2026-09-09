@@ -77,7 +77,11 @@ export default async function DatasetExplorerPage({
         </p>
       </header>
 
-      <DatasetExplorer key={dataset.id} images={dataset.images} />
+      <DatasetExplorer
+        key={dataset.id}
+        images={dataset.images}
+        datasetName={dataset.name}
+      />
     </div>
   );
 }
