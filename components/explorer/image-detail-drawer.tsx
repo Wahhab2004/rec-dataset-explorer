@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useEffect, useState } from "react"
 import { ImageIcon, X } from "lucide-react"
 
 import { Badge } from "@/components/ui/badge"
@@ -38,6 +38,21 @@ export function ImageDetailDrawer({
   onClose: () => void
 }) {
   const [showTxt, setShowTxt] = useState(false)
+
+  useEffect(() => {
+    if (!image) {
+      return
+    }
+
+    function handleKeyDown(event: KeyboardEvent) {
+      if (event.key === "Escape") {
+        onClose()
+      }
+    }
+
+    document.addEventListener("keydown", handleKeyDown)
+    return () => document.removeEventListener("keydown", handleKeyDown)
+  }, [image, onClose])
 
   if (!image) {
     return null

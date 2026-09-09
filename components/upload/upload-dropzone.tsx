@@ -25,10 +25,24 @@ export function UploadDropzone({
   return (
     <div
       className="rounded-xl border-2 border-dashed bg-card p-6 text-center transition-colors hover:border-foreground/30 hover:bg-muted/20"
+      role="button"
+      tabIndex={0}
+      aria-label="Choose dataset files"
       onDragOver={(event) => event.preventDefault()}
       onDrop={(event) => {
         event.preventDefault();
         addFiles(event.dataTransfer.files);
+      }}
+      onKeyDown={(event) => {
+        if (event.key === "Enter" || event.key === " ") {
+          event.preventDefault();
+          inputRef.current?.click();
+        }
+      }}
+      onClick={(event) => {
+        if (event.target === event.currentTarget) {
+          inputRef.current?.click();
+        }
       }}
     >
       <input

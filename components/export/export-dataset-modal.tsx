@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { X } from "lucide-react";
 
 import { ExportProgress } from "@/components/export/export-progress";
@@ -122,6 +122,17 @@ export function ExportDatasetModal({
     "images-and-annotations",
   );
   const generatedFilename = getFilename(datasetName);
+
+  useEffect(() => {
+    function handleKeyDown(event: KeyboardEvent) {
+      if (event.key === "Escape") {
+        onClose();
+      }
+    }
+
+    document.addEventListener("keydown", handleKeyDown);
+    return () => document.removeEventListener("keydown", handleKeyDown);
+  }, [onClose]);
 
   function handleCreateAnother() {
     setStage("configure");
