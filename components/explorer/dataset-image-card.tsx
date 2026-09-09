@@ -53,7 +53,7 @@ export function DatasetImageCard({
       role="button"
       tabIndex={0}
     >
-      <div className="relative grid aspect-[4/3] place-items-center border-b bg-muted/70">
+      <div className="relative grid aspect-4/3 place-items-center border-b bg-muted/70">
         <input
           type="checkbox"
           aria-label={`Select ${image.filename}`}
