@@ -1,11 +1,14 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { ChevronDown, Grid2X2, List } from "lucide-react";
+import { Check, ChevronDown, Grid2X2, List } from "lucide-react";
 
 import { ActiveFilterChips } from "@/components/explorer/active-filter-chips";
+import { ImageDetailDrawer } from "@/components/explorer/image-detail-drawer";
 import { FilterPanel } from "@/components/explorer/filter-panel";
 import { ImageGrid } from "@/components/explorer/image-grid";
+import { SelectionToolbar } from "@/components/explorer/selection-toolbar";
+import { Button } from "@/components/ui/button";
 import {
   areDatasetFiltersValid,
   createEmptyDatasetFilters,
@@ -29,6 +32,10 @@ export function DatasetExplorer({ images }: DatasetExplorerProps) {
     createEmptyDatasetFilters(),
   );
   const [categorySearch, setCategorySearch] = useState("");
+  const [selectedImageIds, setSelectedImageIds] = useState<Set<string>>(
+    () => new Set(),
+  );
+  const [openImage, setOpenImage] = useState<DatasetImage | null>(null);
 
   const filteredImages = useMemo(
     () => filterDatasetImages(images, appliedFilters),
@@ -39,30 +46,75 @@ export function DatasetExplorer({ images }: DatasetExplorerProps) {
     [appliedFilters],
   );
 
+  function keepSelectionInFilteredResults(nextFilters: DatasetFilters) {
+    const visibleImageIds = new Set(
+      filterDatasetImages(images, nextFilters).map((image) => image.id),
+    );
+    setSelectedImageIds((currentSelection) => {
+      const nextSelection = new Set(
+        Array.from(currentSelection).filter((id) => visibleImageIds.has(id)),
+      );
+
+      return nextSelection.size === currentSelection.size
+        ? currentSelection
+        : nextSelection;
+    });
+  }
+
   function handleApplyFilters() {
     if (!areDatasetFiltersValid(draftFilters)) {
       return;
     }
 
     const normalizedFilters = normalizeDatasetFilters(draftFilters);
+    keepSelectionInFilteredResults(normalizedFilters);
     setDraftFilters(normalizedFilters);
     setAppliedFilters(normalizedFilters);
   }
 
   function handleResetFilters() {
+    setSelectedImageIds(new Set());
     setDraftFilters(createEmptyDatasetFilters());
     setAppliedFilters(createEmptyDatasetFilters());
     setCategorySearch("");
   }
 
   function handleRemoveFilter(filterId: string) {
-    setAppliedFilters((currentFilters) =>
-      removeActiveFilter(currentFilters, filterId),
-    );
-    setDraftFilters((currentFilters) =>
-      removeActiveFilter(currentFilters, filterId),
-    );
+    const nextFilters = removeActiveFilter(appliedFilters, filterId);
+    keepSelectionInFilteredResults(nextFilters);
+    setAppliedFilters(nextFilters);
+    setDraftFilters(removeActiveFilter(draftFilters, filterId));
   }
+
+  function handleSelectionChange(imageId: string, selected: boolean) {
+    setSelectedImageIds((currentSelection) => {
+      const nextSelection = new Set(currentSelection);
+
+      if (selected) {
+        nextSelection.add(imageId);
+      } else {
+        nextSelection.delete(imageId);
+      }
+
+      return nextSelection;
+    });
+  }
+
+  function handleSelectAllVisible() {
+    setSelectedImageIds((currentSelection) => {
+      const nextSelection = new Set(currentSelection);
+      filteredImages.forEach((image) => nextSelection.add(image.id));
+      return nextSelection;
+    });
+  }
+
+  function handleClearSelection() {
+    setSelectedImageIds(new Set());
+  }
+
+  const allVisibleImagesSelected =
+    filteredImages.length > 0 &&
+    filteredImages.every((image) => selectedImageIds.has(image.id));
 
   const imageLabel = filteredImages.length === 1 ? "image" : "images";
 
@@ -147,9 +199,44 @@ export function DatasetExplorer({ images }: DatasetExplorerProps) {
         </div>
 
         <div className="mt-4">
-          <ImageGrid images={filteredImages} />
+          {selectedImageIds.size > 0 ? (
+            <SelectionToolbar
+              count={selectedImageIds.size}
+              onClear={handleClearSelection}
+            />
+          ) : null}
+
+          <div className="mb-3 flex items-center justify-between gap-3">
+            <p className="text-xs text-muted-foreground">
+              {selectedImageIds.size > 0
+                ? `${selectedImageIds.size.toLocaleString()} selected across visible results`
+                : "Select images to prepare a dataset"}
+            </p>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={handleSelectAllVisible}
+              disabled={allVisibleImagesSelected || filteredImages.length === 0}
+            >
+              <Check data-icon="inline-start" />
+              Select All Visible
+            </Button>
+          </div>
+
+          <ImageGrid
+            images={filteredImages}
+            selectedImageIds={selectedImageIds}
+            onSelectionChange={handleSelectionChange}
+            onOpenImage={setOpenImage}
+          />
         </div>
       </section>
+
+      <ImageDetailDrawer
+        image={openImage}
+        onClose={() => setOpenImage(null)}
+      />
     </div>
   );
 }

@@ -1,11 +1,22 @@
 import { ImageIcon } from "lucide-react"
+import type { KeyboardEvent } from "react"
 
 import { Badge } from "@/components/ui/badge"
 import type { DatasetImage } from "@/lib/dataset-filtering"
 
 export type { DatasetImage } from "@/lib/dataset-filtering"
 
-export function DatasetImageCard({ image }: { image: DatasetImage }) {
+export function DatasetImageCard({
+  image,
+  selected,
+  onSelectionChange,
+  onOpen,
+}: {
+  image: DatasetImage
+  selected: boolean
+  onSelectionChange: (selected: boolean) => void
+  onOpen: () => void
+}) {
   const displayTags = Array.from(
     new Set([
       image.timeOfDay,
@@ -23,12 +34,32 @@ export function DatasetImageCard({ image }: { image: DatasetImage }) {
       " \u00b7 "
     ) || "No annotations"
 
+  function handleCardKeyDown(event: KeyboardEvent<HTMLElement>) {
+    if (event.target !== event.currentTarget) {
+      return
+    }
+
+    if (event.key === "Enter" || event.key === " ") {
+      event.preventDefault()
+      onOpen()
+    }
+  }
+
   return (
-    <article className="overflow-hidden rounded-lg border bg-card">
+    <article
+      className="cursor-pointer overflow-hidden rounded-lg border bg-card transition-shadow hover:shadow-sm"
+      onClick={onOpen}
+      onKeyDown={handleCardKeyDown}
+      role="button"
+      tabIndex={0}
+    >
       <div className="relative grid aspect-[4/3] place-items-center border-b bg-muted/70">
         <input
           type="checkbox"
           aria-label={`Select ${image.filename}`}
+          checked={selected}
+          onChange={(event) => onSelectionChange(event.target.checked)}
+          onClick={(event) => event.stopPropagation()}
           className="absolute top-2.5 left-2.5 size-4 rounded border-input accent-primary"
         />
         <ImageIcon
