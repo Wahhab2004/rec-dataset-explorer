@@ -7,7 +7,6 @@ import {
   PanelLeftClose,
   PanelLeftOpen,
   Upload,
-  UserRound,
   type LucideIcon,
 } from "lucide-react";
 
@@ -133,28 +132,6 @@ export function AppSidebar({
         })}
       </nav>
 
-      <div className="border-t border-sidebar-border p-2">
-        <div
-          title={collapsed ? "User profile" : undefined}
-          className={cn(
-            "flex min-h-10 items-center rounded-md text-sidebar-foreground",
-            collapsed ? "justify-center" : "gap-2.5 px-2",
-          )}
-        >
-          <span
-            aria-hidden="true"
-            className="grid size-8 shrink-0 place-items-center rounded-full bg-sidebar-accent text-sidebar-accent-foreground"
-          >
-            <UserRound className="size-4" strokeWidth={1.8} />
-          </span>
-          <span className={cn("min-w-0", collapsed && "sr-only")}>
-            <span className="block truncate text-sm font-medium">User profile</span>
-            <span className="block truncate text-xs text-muted-foreground">
-              Placeholder
-            </span>
-          </span>
-        </div>
-      </div>
     </aside>
   );
 }

@@ -41,6 +41,7 @@ export function DatasetUploadForm() {
     }
 
     let active = true;
+    let timeout: number | undefined;
     const poll = async () => {
       if (!active) {
         return;
@@ -71,18 +72,21 @@ export function DatasetUploadForm() {
       }
 
       if (active) {
-        window.setTimeout(() => void poll(), 900);
+        timeout = window.setTimeout(() => void poll(), 900);
       }
     };
 
     void poll();
     return () => {
       active = false;
+      if (timeout !== undefined) {
+        window.clearTimeout(timeout);
+      }
     };
   }, [importId, stage]);
 
   function handleFilesChange(nextFiles: File[]) {
-    setFiles(nextFiles);
+    setFiles(nextFiles.slice(0, 1));
     setErrors([]);
   }
 
@@ -212,7 +216,13 @@ export function DatasetUploadForm() {
       ) : null}
 
       <div className="flex justify-end border-t pt-4">
-        <Button type="submit" className="cursor-pointer">Upload Dataset</Button>
+        <Button
+          type="submit"
+          className="cursor-pointer"
+          disabled={datasetName.trim() === "" || files.length === 0}
+        >
+          Upload Dataset
+        </Button>
       </div>
     </form>
   );

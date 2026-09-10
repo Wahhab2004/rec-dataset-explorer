@@ -63,7 +63,7 @@ export function DatasetImageCard({
           checked={selected}
           onChange={(event) => onSelectionChange(event.target.checked)}
           onClick={(event) => event.stopPropagation()}
-          className="absolute top-2.5 left-2.5 size-4 rounded border-input accent-primary"
+          className="absolute top-2.5 left-2.5 z-10 size-4 rounded border-input accent-primary"
         />
         <BackendImage src={image.imageUrl} alt={image.filename} />
       </div>

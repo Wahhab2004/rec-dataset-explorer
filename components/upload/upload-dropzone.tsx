@@ -48,7 +48,7 @@ export function UploadDropzone({
       <input
         ref={inputRef}
         type="file"
-        multiple
+        accept=".zip,application/zip"
         className="sr-only"
         onChange={(event) => addFiles(event.target.files)}
       />

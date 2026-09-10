@@ -158,9 +158,8 @@ export function DatasetExplorer({ datasetId }: DatasetExplorerProps) {
       installationLocation: dataset.availableFilters.installationLocations.map(
         displayOption,
       ),
-      categories: dataset.availableFilters.categories.map(
-        displayOption,
-      ) as AnnotationCategory[],
+      // Raw backend category values are preserved as-is; labels are formatted only at render time.
+      categories: dataset.availableFilters.categories as AnnotationCategory[],
     };
   }, [dataset]);
 

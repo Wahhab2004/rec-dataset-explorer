@@ -102,14 +102,14 @@ export function toBackendSearchRequest(filters: DatasetFilters): SearchRequest {
     },
     annotationFilters: {
       categories: filters.selectedAnnotationCategories.map((category) =>
-        category.toLowerCase(),
+        category.trim(),
       ),
       objectCounts: filters.objectCountConditions
         .filter(
           (condition) => condition.category !== "" && condition.value.trim() !== "",
         )
         .map((condition) => ({
-          category: condition.category.toLowerCase(),
+          category: condition.category.trim(),
           operator: toBackendOperator(condition.operator),
           value: Number(condition.value),
         })),

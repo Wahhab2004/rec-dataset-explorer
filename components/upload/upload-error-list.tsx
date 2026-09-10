@@ -12,7 +12,7 @@ export function UploadErrorList({
   }
 
   return (
-    <ul className="mt-2 space-y-1 text-sm text-muted-foreground">
+    <ul className="mt-2 max-h-64 space-y-1 overflow-y-auto text-sm text-muted-foreground">
       {errors.map((error, index) => (
         <li key={`${error.code}-${error.file ?? ""}-${index}`}>
           <span className="font-medium text-foreground">{error.code}</span>{" "}

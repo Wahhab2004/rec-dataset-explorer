@@ -10,6 +10,7 @@ import {
   ANNOTATION_CATEGORIES,
   BOUNDING_BOX_FIELDS,
   BOUNDING_BOX_FIELD_LABELS,
+  formatCategoryLabel,
   isBoundingBoxValueValid,
   isObjectCountValueValid,
   NUMERIC_OPERATORS,
@@ -51,7 +52,10 @@ export function AnnotationLevelFilters({
   const matchingCategories = categoryOptions.filter(
     (category) =>
       !filters.selectedAnnotationCategories.includes(category) &&
-      category.toLowerCase().includes(normalizedCategorySearch),
+      (category.toLowerCase().includes(normalizedCategorySearch) ||
+        formatCategoryLabel(category)
+          .toLowerCase()
+          .includes(normalizedCategorySearch)),
   );
 
   function addCategory(category: AnnotationCategory) {
@@ -160,10 +164,10 @@ export function AnnotationLevelFilters({
                     variant="secondary"
                     className="gap-1 pr-1 font-normal"
                   >
-                    {category}
+                    {formatCategoryLabel(category)}
                     <button
                       type="button"
-                      aria-label={`Remove ${category} category`}
+                      aria-label={`Remove ${formatCategoryLabel(category)} category`}
                       onClick={() => removeCategory(category)}
                       className="grid size-4 place-items-center rounded-full outline-none hover:bg-foreground/10 focus-visible:ring-2 focus-visible:ring-ring"
                     >
@@ -202,7 +206,7 @@ export function AnnotationLevelFilters({
                   onClick={() => addCategory(category)}
                   className="flex h-8 w-full items-center rounded-md px-2 text-left text-sm outline-none hover:bg-accent hover:text-accent-foreground focus-visible:bg-accent focus-visible:text-accent-foreground"
                 >
-                  {category}
+                  {formatCategoryLabel(category)}
                 </button>
               ))
             ) : (
@@ -252,7 +256,7 @@ export function AnnotationLevelFilters({
                   <option value="">Select</option>
                   {categoryOptions.map((category) => (
                     <option key={category} value={category}>
-                      {category}
+                      {formatCategoryLabel(category)}
                     </option>
                   ))}
                 </select>

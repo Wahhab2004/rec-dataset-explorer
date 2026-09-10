@@ -334,6 +334,7 @@ export function ExportDatasetModal({
               exportMode={exportMode}
               exportId={exportId ?? ""}
               selectedImageCount={exportStatus?.summary?.selectedImages ?? selectedCount}
+              generatedAnnotationCount={exportStatus?.summary?.generatedAnnotationFiles ?? selectedCount}
               onClose={onClose}
               onCreateAnother={handleCreateAnother}
             />

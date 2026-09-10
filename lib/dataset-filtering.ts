@@ -198,6 +198,13 @@ function normalizeSearchValue(value: string) {
   return value.trim().toLowerCase();
 }
 
+// Display-only formatting; must never be used as the category identity/value.
+export function formatCategoryLabel(category: string) {
+  return category
+    .replace(/[-_]/g, " ")
+    .replace(/\b\w/g, (character) => character.toUpperCase());
+}
+
 function getCompleteBoundingBoxConditions(
   conditions: BoundingBoxConditions,
 ) {
@@ -451,7 +458,10 @@ export function getActiveFilterChips(filters: DatasetFilters) {
   });
 
   filters.selectedAnnotationCategories.forEach((category) => {
-    chips.push({ id: annotationCategoryChipId(category), label: category });
+    chips.push({
+      id: annotationCategoryChipId(category),
+      label: formatCategoryLabel(category),
+    });
   });
 
   filters.objectCountConditions.forEach((condition) => {
@@ -461,7 +471,7 @@ export function getActiveFilterChips(filters: DatasetFilters) {
     ) {
       chips.push({
         id: objectCountChipId(condition.id),
-        label: `${condition.category} ${condition.operator} ${condition.value.trim()}`,
+        label: `${formatCategoryLabel(condition.category)} ${condition.operator} ${condition.value.trim()}`,
       });
     }
   });

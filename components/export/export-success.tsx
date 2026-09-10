@@ -19,6 +19,7 @@ export function ExportSuccess({
   exportMode,
   exportId,
   selectedImageCount,
+  generatedAnnotationCount,
   onClose,
   onCreateAnother,
 }: {
@@ -26,6 +27,7 @@ export function ExportSuccess({
   exportMode: ExportMode;
   exportId: string;
   selectedImageCount: number;
+  generatedAnnotationCount: number;
   onClose: () => void;
   onCreateAnother: () => void;
 }) {
@@ -74,7 +76,7 @@ export function ExportSuccess({
         </div>
         <div className="flex items-center justify-between gap-4 px-3 py-2.5">
           <dt className="text-muted-foreground">Generated annotations</dt>
-          <dd className="font-medium">{selectedImageCount.toLocaleString()}</dd>
+          <dd className="font-medium">{generatedAnnotationCount.toLocaleString()}</dd>
         </div>
         <div className="flex items-center justify-between gap-4 px-3 py-2.5">
           <dt className="text-muted-foreground">Filename</dt>

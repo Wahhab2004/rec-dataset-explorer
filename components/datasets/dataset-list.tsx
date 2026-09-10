@@ -57,9 +57,13 @@ export function DatasetList({ datasets }: { datasets: DatasetSummary[] }) {
           role="status"
           className="rounded-lg border border-dashed bg-card px-6 py-12 text-center"
         >
-          <h2 className="text-sm font-semibold">No datasets found</h2>
+          <h2 className="text-sm font-semibold">
+            {datasets.length === 0 ? "No datasets available" : "No datasets found"}
+          </h2>
           <p className="mt-1 text-sm text-muted-foreground">
-            Try a different search keyword.
+            {datasets.length === 0
+              ? "Upload a dataset to begin exploring."
+              : "Try a different search keyword."}
           </p>
         </div>
       )}
