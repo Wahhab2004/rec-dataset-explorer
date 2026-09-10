@@ -4,6 +4,7 @@ import { useState } from "react";
 import { CheckCircle2, Download } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
+import { downloadExport } from "@/lib/api/exports";
 
 import type { ExportMode } from "@/components/export/export-dataset-modal";
 
@@ -14,22 +15,40 @@ const modeLabels: Record<ExportMode, string> = {
 };
 
 export function ExportSuccess({
-  selectedCount,
   generatedFilename,
   exportMode,
+  exportId,
+  selectedImageCount,
   onClose,
   onCreateAnother,
 }: {
-  selectedCount: number;
   generatedFilename: string;
   exportMode: ExportMode;
+  exportId: string;
+  selectedImageCount: number;
   onClose: () => void;
   onCreateAnother: () => void;
 }) {
   const [downloadMessage, setDownloadMessage] = useState("");
+  const [isDownloading, setIsDownloading] = useState(false);
 
-  function handleDownload() {
-    setDownloadMessage("Download will be connected to the backend export service.");
+  async function handleDownload() {
+    setIsDownloading(true);
+    setDownloadMessage("");
+
+    try {
+      const response = await downloadExport(exportId);
+      const url = URL.createObjectURL(response.blob);
+      const anchor = document.createElement("a");
+      anchor.href = url;
+      anchor.download = response.filename ?? generatedFilename;
+      anchor.click();
+      URL.revokeObjectURL(url);
+    } catch (error) {
+      setDownloadMessage(error instanceof Error ? error.message : "Unable to download export.");
+    } finally {
+      setIsDownloading(false);
+    }
   }
 
   return (
@@ -39,7 +58,7 @@ export function ExportSuccess({
         <div>
           <h3 className="text-sm font-semibold">Dataset successfully generated</h3>
           <p className="mt-1 text-sm text-muted-foreground">
-            Your mock export is ready to download.
+            Your export is ready to download.
           </p>
         </div>
       </div>
@@ -47,7 +66,7 @@ export function ExportSuccess({
       <dl className="divide-y rounded-lg border text-sm">
         <div className="flex items-center justify-between gap-4 px-3 py-2.5">
           <dt className="text-muted-foreground">Selected images</dt>
-          <dd className="font-medium">{selectedCount.toLocaleString()}</dd>
+          <dd className="font-medium">{selectedImageCount.toLocaleString()}</dd>
         </div>
         <div className="flex items-center justify-between gap-4 px-3 py-2.5">
           <dt className="text-muted-foreground">Export type</dt>
@@ -55,7 +74,7 @@ export function ExportSuccess({
         </div>
         <div className="flex items-center justify-between gap-4 px-3 py-2.5">
           <dt className="text-muted-foreground">Generated annotations</dt>
-          <dd className="font-medium">{selectedCount.toLocaleString()}</dd>
+          <dd className="font-medium">{selectedImageCount.toLocaleString()}</dd>
         </div>
         <div className="flex items-center justify-between gap-4 px-3 py-2.5">
           <dt className="text-muted-foreground">Filename</dt>
@@ -72,9 +91,9 @@ export function ExportSuccess({
         <Button type="button" variant="outline" onClick={onCreateAnother}>
           Create Another Export
         </Button>
-        <Button type="button" onClick={handleDownload}>
+        <Button type="button" onClick={() => void handleDownload()} disabled={isDownloading}>
           <Download data-icon="inline-start" />
-          Download ZIP
+          {isDownloading ? "Downloading..." : "Download ZIP"}
         </Button>
       </div>
       {downloadMessage ? (

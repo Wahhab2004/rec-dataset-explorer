@@ -7,6 +7,13 @@ import { ExportProgress } from "@/components/export/export-progress";
 import { ExportSuccess } from "@/components/export/export-success";
 import { Button } from "@/components/ui/button";
 import {
+  createExport,
+  getExportStatus,
+  type ExportType,
+  type ExportStatusResponse,
+} from "@/lib/api/exports";
+import { toBackendExportFilters } from "@/lib/api/datasets";
+import {
   getActiveFilterChips,
   type DatasetFilters,
 } from "@/lib/dataset-filtering";
@@ -106,21 +113,52 @@ function FilterGroup({ title, values }: { title: string; values: readonly string
   );
 }
 
+function getExportType(mode: ExportMode): ExportType {
+  const exportTypes: Record<ExportMode, ExportType> = {
+    "images-and-annotations": "images_and_annotations",
+    "annotation-files": "annotations_only",
+    "complete-package": "complete_dataset",
+  };
+
+  return exportTypes[mode];
+}
+
+function getBackendErrorMessage(status: ExportStatusResponse) {
+  if (typeof status.error === "string") {
+    return status.error;
+  }
+
+  if (status.error?.message) {
+    return status.error.message;
+  }
+
+  return status.errors?.find((error) => error.message)?.message ?? "Export failed.";
+}
+
 export function ExportDatasetModal({
+  datasetId,
+  selectedImageIds,
   selectedCount,
   datasetName,
   appliedFilters,
+  selectionMode,
   onClose,
 }: {
+  datasetId: string;
+  selectedImageIds: string[];
   selectedCount: number;
   datasetName: string;
   appliedFilters: DatasetFilters;
+  selectionMode: "explicit" | "all_filtered";
   onClose: () => void;
 }) {
   const [stage, setStage] = useState<ExportStage>("configure");
   const [exportMode, setExportMode] = useState<ExportMode>(
     "images-and-annotations",
   );
+  const [exportId, setExportId] = useState<string | null>(null);
+  const [exportStatus, setExportStatus] = useState<ExportStatusResponse | null>(null);
+  const [exportError, setExportError] = useState<string | null>(null);
   const generatedFilename = getFilename(datasetName);
 
   useEffect(() => {
@@ -134,7 +172,79 @@ export function ExportDatasetModal({
     return () => document.removeEventListener("keydown", handleKeyDown);
   }, [onClose]);
 
+  useEffect(() => {
+    if (!exportId) {
+      return;
+    }
+
+    const currentExportId = exportId;
+
+    let active = true;
+    let timeout: number | undefined;
+
+    async function poll() {
+      try {
+        const status = await getExportStatus(currentExportId);
+        if (!active) {
+          return;
+        }
+
+        setExportStatus(status);
+        if (status.status === "completed") {
+          setStage("success");
+          return;
+        }
+        if (status.status === "failed") {
+          setExportError(getBackendErrorMessage(status));
+          setExportId(null);
+          setStage("configure");
+          return;
+        }
+
+        timeout = window.setTimeout(() => void poll(), 900);
+      } catch (error) {
+        if (active) {
+          setExportError(error instanceof Error ? error.message : "Unable to check export status.");
+          setExportId(null);
+          setStage("configure");
+        }
+      }
+    }
+
+    void poll();
+    return () => {
+      active = false;
+      if (timeout !== undefined) {
+        window.clearTimeout(timeout);
+      }
+    };
+  }, [exportId]);
+
+  async function handleGenerate() {
+    setExportError(null);
+    setExportStatus(null);
+    setStage("progress");
+
+    try {
+      const response = await createExport(datasetId, {
+        exportType: getExportType(exportMode),
+        selection:
+          selectionMode === "all_filtered"
+            ? { mode: "all_filtered" }
+            : { mode: "explicit", imageIds: selectedImageIds },
+        filters: toBackendExportFilters(appliedFilters),
+      });
+      setExportId(response.exportId);
+    } catch (error) {
+      setExportError(error instanceof Error ? error.message : "Unable to create export.");
+      setStage("configure");
+    }
+  }
+
   function handleCreateAnother() {
+    setExportId(null);
+    setExportStatus(null);
+    setExportError(null);
     setStage("configure");
   }
 
@@ -173,6 +283,7 @@ export function ExportDatasetModal({
         <div className="min-h-0 overflow-y-auto px-5 py-4">
           {stage === "configure" ? (
             <div className="space-y-5">
+              {exportError ? <div role="alert" className="rounded-lg border border-destructive/30 bg-destructive/5 px-3 py-2.5 text-sm text-destructive">{exportError}</div> : null}
               <fieldset>
                 <legend className="text-sm font-semibold">Export Type</legend>
                 <div className="mt-3 space-y-2">
@@ -206,7 +317,7 @@ export function ExportDatasetModal({
                 <Button type="button" variant="ghost" onClick={onClose}>
                   Cancel
                 </Button>
-                <Button type="button" onClick={() => setStage("progress")}>
+                <Button type="button" onClick={() => void handleGenerate()}>
                   Generate Dataset
                 </Button>
               </div>
@@ -214,14 +325,15 @@ export function ExportDatasetModal({
           ) : null}
 
           {stage === "progress" ? (
-            <ExportProgress onComplete={() => setStage("success")} />
+            <ExportProgress status={exportStatus} />
           ) : null}
 
           {stage === "success" ? (
             <ExportSuccess
-              selectedCount={selectedCount}
-              generatedFilename={generatedFilename}
+              generatedFilename={exportStatus?.fileName ?? generatedFilename}
               exportMode={exportMode}
+              exportId={exportId ?? ""}
+              selectedImageCount={exportStatus?.summary?.selectedImages ?? selectedCount}
               onClose={onClose}
               onCreateAnother={handleCreateAnother}
             />

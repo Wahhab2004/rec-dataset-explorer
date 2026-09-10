@@ -19,24 +19,20 @@ import {
   getDataset,
   getImageDetail,
   searchDataset,
+  toBackendSearchRequest,
   type DatasetDetail,
   type DatasetSearchItem,
   type ImageDetail,
-  type SearchRequest,
 } from "@/lib/api/datasets";
 import {
   areDatasetFiltersValid,
-  BOUNDING_BOX_FIELDS,
   createEmptyDatasetFilters,
   getActiveFilterChips,
   normalizeDatasetFilters,
   removeActiveFilter,
   type AnnotationCategory,
   type DatasetFilters,
-  type NumericOperator,
 } from "@/lib/dataset-filtering";
-
-const PAGE_SIZE = 24;
 
 type DatasetExplorerProps = {
   datasetId: string;
@@ -46,67 +42,6 @@ function displayOption(value: string) {
   return value
     .replace(/[-_]/g, " ")
     .replace(/\b\w/g, (character) => character.toUpperCase());
-}
-
-function toBackendOperator(operator: NumericOperator) {
-  const operators = {
-    "=": "eq",
-    "<": "lt",
-    "<=": "lte",
-    ">": "gt",
-    ">=": "gte",
-  } as const;
-
-  return operators[operator];
-}
-
-function toBackendSearchRequest(filters: DatasetFilters): SearchRequest {
-  const bbox = Object.fromEntries(
-    BOUNDING_BOX_FIELDS.map((field) => {
-      const condition = filters.boundingBoxConditions[field];
-      const value = Number(condition.value.trim());
-
-      return [
-        field,
-        condition.value.trim() === ""
-          ? null
-          : { operator: toBackendOperator(condition.operator), value },
-      ];
-    }),
-  ) as SearchRequest["annotationFilters"]["bbox"];
-
-  return {
-    imageFilters: {
-      timeOfDay: filters.timeOfDay ? [filters.timeOfDay.toLowerCase()] : [],
-      weather: filters.weather ? [filters.weather.toLowerCase()] : [],
-      installationLocation: filters.installationLocation
-        ? [filters.installationLocation.toLowerCase()]
-        : [],
-      location: filters.location || null,
-      tags: filters.tags.map((tag) => tag.toLowerCase()),
-    },
-    annotationFilters: {
-      categories: filters.selectedAnnotationCategories.map((category) =>
-        category.toLowerCase(),
-      ),
-      objectCounts: filters.objectCountConditions
-        .filter(
-          (condition) => condition.category !== "" && condition.value.trim() !== "",
-        )
-        .map((condition) => ({
-          category: condition.category.toLowerCase(),
-          operator: toBackendOperator(condition.operator),
-          value: Number(condition.value),
-        })),
-      bbox,
-    },
-    sort: {
-      field: "fileName",
-      direction: "asc",
-    },
-    page: 1,
-    pageSize: PAGE_SIZE,
-  };
 }
 
 function toCardImage(image: DatasetSearchItem): DatasetImageCardData {
@@ -148,6 +83,7 @@ export function DatasetExplorer({ datasetId }: DatasetExplorerProps) {
   const [isDetailLoading, setIsDetailLoading] = useState(false);
   const [detailError, setDetailError] = useState<string | null>(null);
   const [isExportOpen, setIsExportOpen] = useState(false);
+  const [exportAllFiltered, setExportAllFiltered] = useState(false);
 
   const loadSearchResults = useCallback(
     async (filters: DatasetFilters) => {
@@ -274,6 +210,11 @@ export function DatasetExplorer({ datasetId }: DatasetExplorerProps) {
     });
   }
 
+  function handleExportAllFiltered() {
+    setExportAllFiltered(true);
+    setIsExportOpen(true);
+  }
+
   function handleOpenImage(imageId: string) {
     setImageDetail(null);
     setDetailError(null);
@@ -385,7 +326,10 @@ export function DatasetExplorer({ datasetId }: DatasetExplorerProps) {
             {selectedImageIds.size > 0 ? <SelectionToolbar count={selectedImageIds.size} onClear={() => setSelectedImageIds(new Set())} onExport={() => setIsExportOpen(true)} /> : null}
             <div className="mb-3 flex items-center justify-between gap-3">
               <p className="text-xs text-muted-foreground">{selectedImageIds.size > 0 ? `${selectedImageIds.size.toLocaleString()} selected across visible results` : "Select images to prepare a dataset"}</p>
-              <Button type="button" variant="outline" size="sm" onClick={handleSelectAllVisible} disabled={allVisibleImagesSelected || images.length === 0}><Check data-icon="inline-start" />Select All Visible</Button>
+              <div className="flex flex-wrap justify-end gap-2">
+                <Button type="button" variant="outline" size="sm" onClick={handleSelectAllVisible} disabled={allVisibleImagesSelected || images.length === 0}><Check data-icon="inline-start" />Select All Visible</Button>
+                <Button type="button" variant="outline" size="sm" onClick={handleExportAllFiltered} disabled={totalResults === 0}>Export All Filtered</Button>
+              </div>
             </div>
             {searchError ? (
               <div role="alert" className="mb-3 flex flex-wrap items-center justify-between gap-3 rounded-lg border border-destructive/30 bg-destructive/5 px-3 py-2.5 text-sm text-destructive">
@@ -402,7 +346,7 @@ export function DatasetExplorer({ datasetId }: DatasetExplorerProps) {
       {isDetailLoading ? <div className="fixed inset-0 z-50 grid place-items-center bg-foreground/20 p-4"><div className="rounded-lg border bg-card px-4 py-3 text-sm shadow-lg">Loading image details...</div></div> : null}
       {detailError ? <div role="alert" className="fixed right-4 bottom-4 z-50 flex max-w-sm items-center gap-3 rounded-lg border border-destructive/30 bg-card px-3 py-2.5 text-sm shadow-lg"><span className="text-destructive">{detailError}</span><Button type="button" variant="ghost" size="icon-sm" aria-label="Close image detail error" onClick={() => setDetailError(null)}><X aria-hidden="true" /></Button></div> : null}
       <ImageDetailDrawer image={imageDetail} onClose={() => setImageDetail(null)} />
-      {isExportOpen ? <ExportDatasetModal selectedCount={selectedImageIds.size} datasetName={dataset.name} appliedFilters={appliedFilters} onClose={() => setIsExportOpen(false)} /> : null}
+      {isExportOpen ? <ExportDatasetModal datasetId={datasetId} selectedImageIds={Array.from(selectedImageIds)} selectedCount={exportAllFiltered ? totalResults : selectedImageIds.size} datasetName={dataset.name} appliedFilters={appliedFilters} selectionMode={exportAllFiltered ? "all_filtered" : "explicit"} onClose={() => { setIsExportOpen(false); setExportAllFiltered(false); }} /> : null}
     </div>
   );
 }

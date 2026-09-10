@@ -1,54 +1,32 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import type { ExportStatusResponse } from "@/lib/api/exports";
 
-import { Progress } from "@/components/ui/progress";
+const stageLabels: Record<string, string> = {
+  preparing_images: "Preparing export...",
+  generating_annotations: "Generating files...",
+  preparing_metadata: "Generating files...",
+  creating_package: "Generating files...",
+};
 
-const stages = [
-  "Preparing selected images",
-  "Generating YOLO annotations",
-  "Preparing metadata",
-  "Creating package",
-] as const;
-
-export function ExportProgress({ onComplete }: { onComplete: () => void }) {
-  const [progress, setProgress] = useState(0);
-  const onCompleteRef = useRef(onComplete);
-
-  useEffect(() => {
-    onCompleteRef.current = onComplete;
-  }, [onComplete]);
-
-  useEffect(() => {
-    let step = 0;
-    const timer = window.setInterval(() => {
-      step += 1;
-      setProgress(step * 25);
-      if (step === stages.length) {
-        window.clearInterval(timer);
-        onCompleteRef.current();
-      }
-    }, 650);
-
-    return () => window.clearInterval(timer);
-  }, []);
-
-  const activeStage = Math.min(Math.floor(progress / 25), stages.length - 1);
+export function ExportProgress({ status }: { status: ExportStatusResponse | null }) {
+  const progress = status?.progress;
+  const label = status?.stage ? stageLabels[status.stage] ?? "Generating files..." : "Preparing export...";
 
   return (
     <div className="space-y-5">
       <div>
         <p className="text-sm font-semibold">Generating Dataset</p>
         <p className="mt-1 text-sm text-muted-foreground">
-          Preparing your mock export package.
+          The backend is generating your export package.
         </p>
       </div>
 
       <div className="space-y-2">
-        <Progress value={progress} aria-label={`Export progress: ${progress}%`} />
+        {typeof progress === "number" ? <div role="progressbar" aria-valuemin={0} aria-valuemax={100} aria-valuenow={progress} className="h-2 overflow-hidden rounded-full bg-muted"><div className="h-full rounded-full bg-primary transition-[width] duration-300" style={{ width: `${progress}%` }} /></div> : null}
         <div className="flex items-center justify-between text-xs text-muted-foreground">
-          <span>{stages[activeStage]}</span>
-          <span>{progress}%</span>
+          <span>{label}</span>
+          {typeof progress === "number" ? <span>{progress}%</span> : null}
         </div>
       </div>
 

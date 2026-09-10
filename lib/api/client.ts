@@ -63,3 +63,50 @@ export async function apiRequest<T>(
 
   return response.json() as Promise<T>;
 }
+
+export async function apiDownload(path: string): Promise<{
+  blob: Blob;
+  filename: string | null;
+}> {
+  let response: Response;
+
+  try {
+    response = await fetch(`${API_BASE_URL}${path}`, {
+      headers: { Accept: "application/zip, application/octet-stream" },
+    });
+  } catch {
+    throw new ApiError(
+      0,
+      "API_UNAVAILABLE",
+      "The backend API is unavailable.",
+      null,
+    );
+  }
+
+  if (!response.ok) {
+    let body: {
+      error?: { code?: string; message?: string; details?: unknown };
+    } | null = null;
+
+    try {
+      body = await response.json();
+    } catch {
+      body = null;
+    }
+
+    throw new ApiError(
+      response.status,
+      body?.error?.code ?? "API_REQUEST_FAILED",
+      body?.error?.message ?? `Request failed with status ${response.status}.`,
+      body?.error?.details ?? null,
+    );
+  }
+
+  const disposition = response.headers.get("Content-Disposition");
+  const filenameMatch = disposition?.match(/filename\*?=(?:UTF-8''|\")?([^;\"]+)/i);
+
+  return {
+    blob: await response.blob(),
+    filename: filenameMatch ? decodeURIComponent(filenameMatch[1].trim()) : null,
+  };
+}

@@ -1,4 +1,9 @@
 import { apiRequest } from "@/lib/api/client";
+import {
+  BOUNDING_BOX_FIELDS,
+  type DatasetFilters,
+  type NumericOperator,
+} from "@/lib/dataset-filtering";
 
 export type DatasetStatus = "processing" | "ready" | "failed" | string;
 
@@ -53,10 +58,76 @@ export type SearchRequest = {
   pageSize: number;
 };
 
-type BoundingBoxRequest = {
+export type BoundingBoxRequest = {
   operator: "eq" | "lt" | "lte" | "gt" | "gte";
   value: number;
 };
+
+function toBackendOperator(operator: NumericOperator) {
+  const operators = {
+    "=": "eq",
+    "<": "lt",
+    "<=": "lte",
+    ">": "gt",
+    ">=": "gte",
+  } as const;
+
+  return operators[operator];
+}
+
+export function toBackendSearchRequest(filters: DatasetFilters): SearchRequest {
+  const bbox = Object.fromEntries(
+    BOUNDING_BOX_FIELDS.map((field) => {
+      const condition = filters.boundingBoxConditions[field];
+      const value = Number(condition.value.trim());
+
+      return [
+        field,
+        condition.value.trim() === ""
+          ? null
+          : { operator: toBackendOperator(condition.operator), value },
+      ];
+    }),
+  ) as SearchRequest["annotationFilters"]["bbox"];
+
+  return {
+    imageFilters: {
+      timeOfDay: filters.timeOfDay ? [filters.timeOfDay.toLowerCase()] : [],
+      weather: filters.weather ? [filters.weather.toLowerCase()] : [],
+      installationLocation: filters.installationLocation
+        ? [filters.installationLocation.toLowerCase()]
+        : [],
+      location: filters.location || null,
+      tags: filters.tags.map((tag) => tag.toLowerCase()),
+    },
+    annotationFilters: {
+      categories: filters.selectedAnnotationCategories.map((category) =>
+        category.toLowerCase(),
+      ),
+      objectCounts: filters.objectCountConditions
+        .filter(
+          (condition) => condition.category !== "" && condition.value.trim() !== "",
+        )
+        .map((condition) => ({
+          category: condition.category.toLowerCase(),
+          operator: toBackendOperator(condition.operator),
+          value: Number(condition.value),
+        })),
+      bbox,
+    },
+    sort: { field: "fileName", direction: "asc" },
+    page: 1,
+    pageSize: 24,
+  };
+}
+
+export function toBackendExportFilters(filters: DatasetFilters) {
+  const request = toBackendSearchRequest(filters);
+  return {
+    imageFilters: request.imageFilters,
+    annotationFilters: request.annotationFilters,
+  };
+}
 
 export type DatasetSearchItem = {
   id: string;
