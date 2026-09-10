@@ -36,6 +36,12 @@ class StorageService:
     def dataset_directory(self, dataset_id: UUID | str) -> Path:
         return self.safe_resolve("datasets", str(dataset_id))
 
+    def import_directory(self, import_id: UUID | str) -> Path:
+        return self.safe_resolve("imports", str(import_id))
+
+    def import_source_path(self, import_id: UUID | str) -> Path:
+        return self.safe_resolve("imports", str(import_id), "source.zip")
+
     def image_path(self, dataset_id: UUID | str, file_name: str) -> Path:
         return self.safe_resolve("datasets", str(dataset_id), "images", file_name)
 
