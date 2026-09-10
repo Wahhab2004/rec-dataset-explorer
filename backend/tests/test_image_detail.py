@@ -140,7 +140,10 @@ def test_image_detail_returns_metadata_summary_and_yolo_content(
     assert response.json() == {
         "id": str(image_detail_context["image_id"]),
         "fileName": "image_000123.jpg",
-        "imageUrl": "demo/detail/images/image_000123.jpg",
+        "imageUrl": (
+            f"/api/v1/datasets/{image_detail_context['dataset_id']}"
+            "/files/images/image_000123.jpg"
+        ),
         "metadata": {
             "timeOfDay": "nighttime",
             "weather": "rainy",

@@ -19,12 +19,14 @@ from app.schemas.search import (
     SearchResultItem,
 )
 from app.services.dataset_service import DatasetNotFoundError
+from app.services.storage_service import StorageService
 
 
 def search_dataset(
     db: Session,
     dataset_id: UUID,
     request: SearchRequest,
+    storage: StorageService | None = None,
 ) -> SearchResponse:
     if db.get(Dataset, dataset_id) is None:
         raise DatasetNotFoundError(dataset_id)
@@ -49,12 +51,13 @@ def search_dataset(
         db,
         [image.id for image in images],
     )
+    storage_service = storage or StorageService()
 
     items = [
         SearchResultItem(
             id=image.id,
             fileName=image.file_name,
-            imageUrl=image.file_path,
+            imageUrl=storage_service.image_url(dataset_id, image.file_name),
             metadata=ImageMetadata(
                 timeOfDay=image.time_of_day,
                 weather=image.weather,

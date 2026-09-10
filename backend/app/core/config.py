@@ -13,6 +13,7 @@ class Settings(BaseSettings):
     app_env: str = "development"
     api_v1_prefix: str = "/api/v1"
     database_url: str
+    storage_root: str = "storage"
 
     model_config = SettingsConfigDict(
         env_file=ENV_FILE,

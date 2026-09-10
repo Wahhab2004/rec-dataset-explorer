@@ -13,6 +13,7 @@ from app.models.image import Image
 from app.schemas.image import AnnotationFile, ImageDetail
 from app.schemas.search import AnnotationSummary, ImageMetadata
 from app.services.dataset_service import DatasetNotFoundError
+from app.services.storage_service import StorageService
 
 
 class ImageNotFoundError(Exception):
@@ -25,6 +26,7 @@ def get_image_detail(
     db: Session,
     dataset_id: UUID,
     image_id: UUID,
+    storage: StorageService | None = None,
 ) -> ImageDetail:
     if db.get(Dataset, dataset_id) is None:
         raise DatasetNotFoundError(dataset_id)
@@ -44,7 +46,7 @@ def get_image_detail(
     return ImageDetail(
         id=image.id,
         fileName=image.file_name,
-        imageUrl=image.file_path,
+        imageUrl=(storage or StorageService()).image_url(dataset_id, image.file_name),
         metadata=ImageMetadata(
             timeOfDay=image.time_of_day,
             weather=image.weather,

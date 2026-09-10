@@ -170,6 +170,9 @@ def test_no_filters_returns_all_images(client: TestClient, search_context: UUID)
     assert body["total"] == 6
     assert len(body["items"]) == 6
     assert body["items"][0]["fileName"] == "a-night-rain-front.jpg"
+    assert body["items"][0]["imageUrl"].endswith(
+        f"/files/images/a-night-rain-front.jpg",
+    )
     assert body["items"][0]["annotationSummary"] == [
         {"category": "car", "count": 2},
         {"category": "person", "count": 4},

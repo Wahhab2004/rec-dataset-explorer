@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import base64
 from dataclasses import dataclass
 
 from sqlalchemy import select
@@ -10,6 +11,12 @@ from app.models.annotation import Annotation
 from app.models.dataset import Dataset
 from app.models.dataset_class import DatasetClass
 from app.models.image import Image
+from app.services.storage_service import StorageService
+
+
+PLACEHOLDER_PNG = base64.b64decode(
+    "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII="
+)
 
 
 @dataclass(frozen=True)
@@ -321,6 +328,13 @@ def seed_dataset(session: Session, definition: DatasetSeed) -> tuple[int, int]:
         dataset.images.append(image_record)
 
     session.add(dataset)
+    session.flush()
+
+    storage = StorageService()
+    storage.create_dataset_directories(dataset.id)
+    for image_seed in definition.images:
+        storage.image_path(dataset.id, image_seed.file_name).write_bytes(PLACEHOLDER_PNG)
+
     return len(definition.images), sum(
         len(image_seed.annotations) for image_seed in definition.images
     )
