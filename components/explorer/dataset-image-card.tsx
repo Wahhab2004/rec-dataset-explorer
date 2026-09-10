@@ -1,11 +1,12 @@
-import { ImageIcon } from "lucide-react"
 import type { KeyboardEvent } from "react"
 
 import { Badge } from "@/components/ui/badge"
+import { BackendImage } from "@/components/explorer/backend-image"
 
 export type DatasetImageCardData = {
   id: string
   filename: string
+  imageUrl?: string | null
   timeOfDay: string | null
   weather: string | null
   installationLocation: string | null
@@ -64,10 +65,7 @@ export function DatasetImageCard({
           onClick={(event) => event.stopPropagation()}
           className="absolute top-2.5 left-2.5 size-4 rounded border-input accent-primary"
         />
-        <ImageIcon
-          aria-hidden="true"
-          className="size-9 stroke-[1.25] text-muted-foreground/70"
-        />
+        <BackendImage src={image.imageUrl} alt={image.filename} />
       </div>
 
       <div className="space-y-2 p-3">

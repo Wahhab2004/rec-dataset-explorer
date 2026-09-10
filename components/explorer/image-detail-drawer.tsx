@@ -1,10 +1,11 @@
 "use client"
 
 import { useEffect, useState } from "react"
-import { ImageIcon, X } from "lucide-react"
+import { X } from "lucide-react"
 
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
+import { BackendImage } from "@/components/explorer/backend-image"
 import type { ImageDetail } from "@/lib/api/datasets"
 
 export function ImageDetailDrawer({
@@ -84,10 +85,7 @@ export function ImageDetailDrawer({
               Original image preview
             </h3>
             <div className="grid aspect-4/3 place-items-center rounded-lg border bg-muted/70">
-              <ImageIcon
-                aria-hidden="true"
-                className="size-14 stroke-[1.15] text-muted-foreground/70"
-              />
+              <BackendImage src={image.imageUrl} alt={image.fileName} />
             </div>
           </section>
 

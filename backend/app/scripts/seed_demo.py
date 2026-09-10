@@ -1,8 +1,9 @@
 from __future__ import annotations
 
-import base64
 from dataclasses import dataclass
 
+from PIL import Image as PILImage
+from PIL import ImageDraw
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
@@ -14,9 +15,7 @@ from app.models.image import Image
 from app.services.storage_service import StorageService
 
 
-PLACEHOLDER_PNG = base64.b64decode(
-    "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII="
-)
+DEMO_IMAGE_SIZE = (640, 360)
 
 
 @dataclass(frozen=True)
@@ -76,6 +75,80 @@ def image(
         tags,
         annotations,
     )
+
+
+def create_demo_image(image_seed: ImageSeed, output_path: str) -> None:
+    width, height = DEMO_IMAGE_SIZE
+    is_night = image_seed.time_of_day == "nighttime"
+    sky = (18, 28, 52) if is_night else (126, 190, 228)
+    horizon = (32, 44, 66) if is_night else (190, 205, 190)
+    road = (28, 31, 37) if is_night else (66, 72, 76)
+    image = PILImage.new("RGB", DEMO_IMAGE_SIZE, sky)
+    draw = ImageDraw.Draw(image)
+
+    draw.rectangle((0, height * 0.42, width, height * 0.62), fill=horizon)
+    draw.polygon(
+        [(width * 0.18, height), (width * 0.43, height * 0.53),
+         (width * 0.57, height * 0.53), (width * 0.86, height)],
+        fill=road,
+    )
+
+    for x in (width * 0.47, width * 0.53):
+        draw.line(
+            (x, height * 0.6, x + (x - width / 2) * 2.8, height),
+            fill=(236, 205, 100),
+            width=4,
+        )
+
+    if image_seed.installation_location == "rear":
+        vehicle_color = (156, 54, 52)
+    elif image_seed.installation_location == "side":
+        vehicle_color = (53, 116, 150)
+    else:
+        vehicle_color = (214, 140, 48)
+
+    for index in range(3):
+        center_x = int(width * (0.24 + index * 0.27))
+        base_y = int(height * (0.58 + (index % 2) * 0.05))
+        car_width = 38 + index * 8
+        car_height = 18 + index * 4
+        draw.rectangle(
+            (center_x - car_width, base_y - car_height,
+             center_x + car_width, base_y + car_height),
+            fill=vehicle_color,
+        )
+        draw.rectangle(
+            (center_x - car_width // 2, base_y - car_height - 8,
+             center_x + car_width // 2, base_y - car_height),
+            fill=(42, 58, 72),
+        )
+        if is_night:
+            draw.ellipse(
+                (center_x - car_width + 5, base_y - 4,
+                 center_x - car_width + 13, base_y + 4),
+                fill=(255, 226, 128),
+            )
+            draw.ellipse(
+                (center_x + car_width - 13, base_y - 4,
+                 center_x + car_width - 5, base_y + 4),
+                fill=(255, 226, 128),
+            )
+
+    if "intersection" in image_seed.tags or "city-center" in image_seed.tags:
+        for x in range(40, width, 70):
+            draw.rectangle((x, height * 0.34, x + 10, height * 0.58), fill=(52, 57, 66))
+            draw.rectangle((x - 18, height * 0.29, x + 28, height * 0.35), fill=(61, 66, 76))
+
+    if image_seed.weather == "rainy":
+        for index in range(35):
+            x = (index * 83) % width
+            y = (index * 47) % int(height * 0.68)
+            draw.line((x, y, x - 8, y + 18), fill=(169, 204, 220), width=2)
+    elif image_seed.weather == "foggy":
+        overlay = PILImage.new("RGBA", DEMO_IMAGE_SIZE, (210, 220, 220, 72))
+        image = PILImage.alpha_composite(image.convert("RGBA"), overlay).convert("RGB")
+
+    image.save(output_path, format="JPEG", quality=72, optimize=True)
 
 
 DEMO_DATASETS: tuple[DatasetSeed, ...] = (
@@ -333,7 +406,10 @@ def seed_dataset(session: Session, definition: DatasetSeed) -> tuple[int, int]:
     storage = StorageService()
     storage.create_dataset_directories(dataset.id)
     for image_seed in definition.images:
-        storage.image_path(dataset.id, image_seed.file_name).write_bytes(PLACEHOLDER_PNG)
+        create_demo_image(
+            image_seed,
+            str(storage.image_path(dataset.id, image_seed.file_name)),
+        )
 
     return len(definition.images), sum(
         len(image_seed.annotations) for image_seed in definition.images

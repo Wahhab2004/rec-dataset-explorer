@@ -113,6 +113,7 @@ function toCardImage(image: DatasetSearchItem): DatasetImageCardData {
   return {
     id: image.id,
     filename: image.fileName,
+    imageUrl: image.imageUrl,
     timeOfDay: image.metadata.timeOfDay,
     weather: image.metadata.weather,
     installationLocation: image.metadata.installationLocation,
