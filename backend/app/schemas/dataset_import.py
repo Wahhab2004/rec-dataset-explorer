@@ -21,6 +21,8 @@ class ImportSummary(BaseModel):
     annotation_files: int = Field(alias="annotationFiles")
     metadata_loaded: bool = Field(alias="metadataLoaded")
     annotation_format: str = Field(alias="annotationFormat")
+    annotations: int | None = None
+    classes: int | None = None
 
 
 class ImportStatusResponse(BaseModel):

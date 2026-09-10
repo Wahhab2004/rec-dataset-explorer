@@ -1,7 +1,5 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
-
 import { Progress } from "@/components/ui/progress";
 
 const stages = [
@@ -13,30 +11,7 @@ const stages = [
   "Creating dataset records",
 ] as const;
 
-export function UploadProgress({ onComplete }: { onComplete: () => void }) {
-  const [step, setStep] = useState(0);
-  const onCompleteRef = useRef(onComplete);
-
-  useEffect(() => {
-    onCompleteRef.current = onComplete;
-  }, [onComplete]);
-
-  useEffect(() => {
-    const timer = window.setInterval(() => {
-      setStep((currentStep) => {
-        const nextStep = currentStep + 1;
-        if (nextStep >= stages.length) {
-          window.clearInterval(timer);
-          onCompleteRef.current();
-          return stages.length;
-        }
-        return nextStep;
-      });
-    }, 650);
-
-    return () => window.clearInterval(timer);
-  }, []);
-
+export function UploadProgress({ step }: { step: number }) {
   const progress = Math.min(Math.round((step / stages.length) * 100), 100);
   const processedImages = Math.min(7_240, Math.round((progress / 100) * 7_240));
   const processedAnnotations = Math.min(

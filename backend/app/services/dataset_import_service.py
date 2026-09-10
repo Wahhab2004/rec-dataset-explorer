@@ -12,6 +12,7 @@ from app.services.dataset_validation_service import (
     ValidationResult,
     validate_dataset_zip,
 )
+from app.services.dataset_ingestion_service import ingest_import_job
 from app.services.storage_service import StorageService
 
 MAX_UPLOAD_BYTES = 100_000_000
@@ -114,6 +115,8 @@ def save_and_validate_import(
 
     db.commit()
     db.refresh(job)
+    if not result.errors:
+        return ingest_import_job(db, job, storage)
     return job
 
 

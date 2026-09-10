@@ -17,11 +17,14 @@ from sqlalchemy.orm import Session, sessionmaker
 from app.db.base import Base
 from app.db.session import get_db
 from app.main import app
+from app.models.dataset import Dataset
+from app.models.import_job import ImportJob
 from app.services.storage_service import StorageService, get_storage_service
+from app.services.dataset_ingestion_service import ingest_import_job
 
 
 @pytest.fixture(scope="module")
-def import_context() -> Generator[None, None, None]:
+def import_context(tmp_path_factory: pytest.TempPathFactory) -> Generator[dict[str, object], None, None]:
     configured_url = make_url("postgresql+psycopg://postgres:postgres@localhost:5432/rec_dataset_explorer")
     database_name = f"rec_dataset_explorer_import_api_{uuid4().hex[:12]}"
     admin_url = configured_url.set(drivername="postgresql", database="postgres")
@@ -31,7 +34,7 @@ def import_context() -> Generator[None, None, None]:
     engine = create_engine(test_url)
     Base.metadata.create_all(engine)
     SessionLocal = sessionmaker(bind=engine, class_=Session, expire_on_commit=False)
-    storage = StorageService()
+    storage = StorageService(tmp_path_factory.mktemp("import-storage"))
 
     def override_get_db() -> Generator[Session, None, None]:
         with SessionLocal() as session:
@@ -40,7 +43,7 @@ def import_context() -> Generator[None, None, None]:
     app.dependency_overrides[get_db] = override_get_db
     app.dependency_overrides[get_storage_service] = lambda: storage
     try:
-        yield
+        yield {"SessionLocal": SessionLocal, "storage": storage}
     finally:
         app.dependency_overrides.clear()
         Base.metadata.drop_all(engine)
@@ -50,7 +53,7 @@ def import_context() -> Generator[None, None, None]:
 
 
 @pytest.fixture
-def client(import_context: None) -> Generator[TestClient, None, None]:
+def client(import_context: dict[str, object]) -> Generator[TestClient, None, None]:
     with TestClient(app) as test_client:
         yield test_client
 
@@ -94,9 +97,50 @@ def test_valid_structured_zip_is_validated(client: TestClient) -> None:
     assert response.status_code == 202
     status = get_status(client, response)
     assert status.status_code == 200
-    assert status.json()["status"] == "processing"
-    assert status.json()["stage"] == "validated"
+    assert status.json()["status"] == "completed"
+    assert status.json()["stage"] == "completed"
+    assert status.json()["datasetId"]
     assert status.json()["summary"]["images"] == 1
+    assert status.json()["summary"]["annotationFiles"] == 1
+    assert status.json()["summary"]["annotations"] == 1
+    assert status.json()["summary"]["classes"] == 1
+
+    dataset = client.get(f"/api/v1/datasets/{status.json()['datasetId']}")
+    assert dataset.status_code == 200
+    assert dataset.json()["imageCount"] == 1
+
+    search = client.post(f"/api/v1/datasets/{status.json()['datasetId']}/search", json={})
+    assert search.status_code == 200
+    assert search.json()["total"] == 1
+
+
+def test_completed_import_is_idempotent(
+    client: TestClient,
+    import_context: dict[str, object],
+) -> None:
+    response = upload(client, valid_files())
+    import_id = response.json()["importId"]
+    session_local = import_context["SessionLocal"]
+    storage = import_context["storage"]
+    with session_local() as session:
+        job = session.get(ImportJob, import_id)
+        dataset_count_before = session.query(Dataset).count()
+        ingest_import_job(session, job, storage)
+        dataset_count_after = session.query(Dataset).count()
+    assert dataset_count_after == dataset_count_before
+
+
+def test_ingestion_failure_rolls_back_dataset(client: TestClient, monkeypatch: pytest.MonkeyPatch) -> None:
+    def fail_copy(*args, **kwargs):
+        raise OSError("simulated permanent storage failure")
+
+    monkeypatch.setattr("app.services.dataset_ingestion_service._copy_archive_file", fail_copy)
+    response = upload(client, valid_files())
+    status = get_status(client, response)
+    assert status.json()["status"] == "failed"
+    assert status.json()["stage"] == "ingestion_failed"
+    assert status.json()["errors"][0]["code"] == "INGESTION_FAILED"
+
 
 
 def test_invalid_zip_is_reported(client: TestClient) -> None:

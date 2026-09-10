@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, type FormEvent } from "react";
+import { useEffect, useState, type FormEvent } from "react";
 
 import { UploadDropzone } from "@/components/upload/upload-dropzone";
 import { UploadProgress } from "@/components/upload/upload-progress";
@@ -17,7 +17,30 @@ export function DatasetUploadForm() {
   const [annotationFormat, setAnnotationFormat] = useState("YOLO");
   const [files, setFiles] = useState<File[]>([]);
   const [stage, setStage] = useState<UploadStage>("form");
+  const [uploadStep, setUploadStep] = useState(0);
   const [errors, setErrors] = useState<string[]>([]);
+
+  useEffect(() => {
+    if (stage !== "progress") {
+      return;
+    }
+
+    let currentStep = 0;
+    const timer = window.setInterval(() => {
+      currentStep += 1;
+      setUploadStep(currentStep);
+
+      if (currentStep >= 6) {
+        window.clearInterval(timer);
+        const hasMockValidationProblem = files.some((file) =>
+          /invalid|error/i.test(file.name),
+        );
+        setStage(hasMockValidationProblem ? "error" : "success");
+      }
+    }, 650);
+
+    return () => window.clearInterval(timer);
+  }, [files, stage]);
 
   function handleFilesChange(nextFiles: File[]) {
     setFiles(nextFiles);
@@ -46,6 +69,7 @@ export function DatasetUploadForm() {
     }
 
     setErrors([]);
+    setUploadStep(0);
     setStage("progress");
   }
 
@@ -55,18 +79,12 @@ export function DatasetUploadForm() {
     setAnnotationFormat("YOLO");
     setFiles([]);
     setErrors([]);
+    setUploadStep(0);
     setStage("form");
   }
 
-  function handleUploadComplete() {
-    const hasMockValidationProblem = files.some((file) =>
-      /invalid|error/i.test(file.name),
-    );
-    setStage(hasMockValidationProblem ? "error" : "success");
-  }
-
   if (stage === "progress") {
-    return <UploadProgress onComplete={handleUploadComplete} />;
+    return <UploadProgress step={uploadStep} />;
   }
 
   if (stage === "success") {
