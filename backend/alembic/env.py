@@ -14,6 +14,7 @@ if str(BACKEND_DIR) not in sys.path:
 
 from app.core.config import get_settings
 from app.db.base import Base
+import app.models  # noqa: F401  # Register model tables with Base.metadata.
 
 
 config = context.config
