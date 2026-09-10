@@ -2,9 +2,16 @@ import { ImageIcon } from "lucide-react"
 import type { KeyboardEvent } from "react"
 
 import { Badge } from "@/components/ui/badge"
-import type { DatasetImage } from "@/lib/dataset-filtering"
 
-export type { DatasetImage } from "@/lib/dataset-filtering"
+export type DatasetImageCardData = {
+  id: string
+  filename: string
+  timeOfDay: string | null
+  weather: string | null
+  installationLocation: string | null
+  tags: readonly string[]
+  annotationSummary: readonly { category: string; count: number }[]
+}
 
 export function DatasetImageCard({
   image,
@@ -12,7 +19,7 @@ export function DatasetImageCard({
   onSelectionChange,
   onOpen,
 }: {
-  image: DatasetImage
+  image: DatasetImageCardData
   selected: boolean
   onSelectionChange: (selected: boolean) => void
   onOpen: () => void
@@ -23,16 +30,11 @@ export function DatasetImageCard({
       image.weather,
       image.installationLocation,
       ...image.tags,
-    ])
+    ].filter((tag): tag is string => Boolean(tag)))
   )
-  const categoryCounts = image.annotations.reduce((counts, annotation) => {
-    counts.set(annotation.category, (counts.get(annotation.category) ?? 0) + 1)
-    return counts
-  }, new Map<string, number>())
-  const annotationSummary =
-    Array.from(categoryCounts, ([category, count]) => `${category} ${count}`).join(
-      " \u00b7 "
-    ) || "No annotations"
+  const annotationSummary = image.annotationSummary
+    .map(({ category, count }) => `${category} ${count}`)
+    .join(" \u00b7 ") || "No annotations"
 
   function handleCardKeyDown(event: KeyboardEvent<HTMLElement>) {
     if (event.target !== event.currentTarget) {

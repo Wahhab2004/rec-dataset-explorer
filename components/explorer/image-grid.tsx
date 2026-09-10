@@ -1,5 +1,9 @@
-import { DatasetImageCard } from "@/components/explorer/dataset-image-card"
-import type { DatasetImage } from "@/lib/dataset-filtering"
+import {
+  DatasetImageCard,
+  type DatasetImageCardData,
+} from "@/components/explorer/dataset-image-card"
+
+export type { DatasetImageCardData } from "@/components/explorer/dataset-image-card"
 
 export function ImageGrid({
   images,
@@ -7,10 +11,10 @@ export function ImageGrid({
   onSelectionChange,
   onOpenImage,
 }: {
-  images: readonly DatasetImage[]
+  images: readonly DatasetImageCardData[]
   selectedImageIds: ReadonlySet<string>
   onSelectionChange: (imageId: string, selected: boolean) => void
-  onOpenImage: (image: DatasetImage) => void
+  onOpenImage: (image: DatasetImageCardData) => void
 }) {
   if (images.length === 0) {
     return (

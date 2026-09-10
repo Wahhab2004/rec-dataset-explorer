@@ -5,36 +5,13 @@ import { ImageIcon, X } from "lucide-react"
 
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
-import {
-  ANNOTATION_CATEGORIES,
-  type DatasetImage,
-} from "@/lib/dataset-filtering"
-
-function getAnnotationCounts(image: DatasetImage) {
-  return image.annotations.reduce((counts, annotation) => {
-    counts.set(annotation.category, (counts.get(annotation.category) ?? 0) + 1)
-    return counts
-  }, new Map<string, number>())
-}
-
-function getYoloText(image: DatasetImage) {
-  const categoryIndexes = new Map(
-    ANNOTATION_CATEGORIES.map((category, index) => [category, index]),
-  )
-
-  return image.annotations
-    .map(
-      (annotation) =>
-        `${categoryIndexes.get(annotation.category) ?? 0} ${annotation.xCenter.toFixed(3)} ${annotation.yCenter.toFixed(3)} ${annotation.width.toFixed(3)} ${annotation.height.toFixed(3)}`,
-    )
-    .join("\n")
-}
+import type { ImageDetail } from "@/lib/api/datasets"
 
 export function ImageDetailDrawer({
   image,
   onClose,
 }: {
-  image: DatasetImage | null
+  image: ImageDetail | null
   onClose: () => void
 }) {
   const [showTxt, setShowTxt] = useState(false)
@@ -58,7 +35,6 @@ export function ImageDetailDrawer({
     return null
   }
 
-  const annotationCounts = getAnnotationCounts(image)
 
   function closeDrawer() {
     setShowTxt(false)
@@ -83,9 +59,9 @@ export function ImageDetailDrawer({
             <h2
               id="image-detail-title"
               className="mt-1 truncate text-sm font-semibold"
-              title={image.filename}
+              title={image.fileName}
             >
-              {image.filename}
+              {image.fileName}
             </h2>
           </div>
           <Button
@@ -122,26 +98,32 @@ export function ImageDetailDrawer({
             <dl className="divide-y rounded-lg border text-sm">
               <div className="grid grid-cols-[minmax(0,1fr)_minmax(0,1.4fr)] gap-3 px-3 py-2.5">
                 <dt className="text-muted-foreground">Time of Day</dt>
-                <dd className="text-right font-medium">{image.timeOfDay}</dd>
+                <dd className="text-right font-medium">
+                  {image.metadata.timeOfDay ?? "Not provided"}
+                </dd>
               </div>
               <div className="grid grid-cols-[minmax(0,1fr)_minmax(0,1.4fr)] gap-3 px-3 py-2.5">
                 <dt className="text-muted-foreground">Weather</dt>
-                <dd className="text-right font-medium">{image.weather}</dd>
+                <dd className="text-right font-medium">
+                  {image.metadata.weather ?? "Not provided"}
+                </dd>
               </div>
               <div className="grid grid-cols-[minmax(0,1fr)_minmax(0,1.4fr)] gap-3 px-3 py-2.5">
                 <dt className="text-muted-foreground">Installation Location</dt>
                 <dd className="text-right font-medium">
-                  {image.installationLocation}
+                  {image.metadata.installationLocation ?? "Not provided"}
                 </dd>
               </div>
               <div className="grid grid-cols-[minmax(0,1fr)_minmax(0,1.4fr)] gap-3 px-3 py-2.5">
                 <dt className="text-muted-foreground">Location</dt>
-                <dd className="text-right font-medium">{image.location}</dd>
+                <dd className="text-right font-medium">
+                  {image.metadata.location ?? "Not provided"}
+                </dd>
               </div>
               <div className="space-y-2 px-3 py-2.5">
                 <dt className="text-muted-foreground">Additional Tags</dt>
                 <dd className="flex flex-wrap gap-1">
-                  {image.tags.map((tag) => (
+                  {image.metadata.tags.map((tag) => (
                     <Badge key={tag} variant="secondary" className="font-normal">
                       {tag}
                     </Badge>
@@ -171,7 +153,7 @@ export function ImageDetailDrawer({
                   </tr>
                 </thead>
                 <tbody className="divide-y">
-                  {Array.from(annotationCounts, ([category, count]) => (
+                  {image.annotationSummary.map(({ category, count }) => (
                     <tr key={category}>
                       <td className="px-3 py-2">{category}</td>
                       <td className="px-3 py-2 text-right font-medium">{count}</td>
@@ -189,7 +171,7 @@ export function ImageDetailDrawer({
                   Original Annotation File
                 </h3>
                 <p className="mt-1 truncate font-mono text-xs text-muted-foreground">
-                  {image.filename.replace(/\.[^.]+$/, ".txt")}
+                  {image.annotationFile.fileName}
                 </p>
               </div>
               <Button
@@ -204,7 +186,7 @@ export function ImageDetailDrawer({
             </div>
             {showTxt ? (
               <pre className="mt-3 max-h-64 overflow-auto rounded-lg border bg-muted/50 p-3 font-mono text-xs leading-6 whitespace-pre-wrap">
-                {getYoloText(image)}
+                {image.annotationFile.content}
               </pre>
             ) : null}
           </section>

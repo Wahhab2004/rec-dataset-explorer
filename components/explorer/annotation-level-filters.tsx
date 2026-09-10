@@ -25,6 +25,7 @@ type AnnotationLevelFiltersProps = {
   categorySearch: string;
   onCategorySearchChange: (value: string) => void;
   onChange: (filters: AnnotationLevelFilterState) => void;
+  categoryOptions?: readonly AnnotationCategory[];
 };
 
 const selectClassName =
@@ -43,10 +44,11 @@ export function AnnotationLevelFilters({
   categorySearch,
   onCategorySearchChange,
   onChange,
+  categoryOptions = ANNOTATION_CATEGORIES,
 }: AnnotationLevelFiltersProps) {
   const nextObjectCountId = useRef(2);
   const normalizedCategorySearch = categorySearch.trim().toLowerCase();
-  const matchingCategories = ANNOTATION_CATEGORIES.filter(
+  const matchingCategories = categoryOptions.filter(
     (category) =>
       !filters.selectedAnnotationCategories.includes(category) &&
       category.toLowerCase().includes(normalizedCategorySearch),
@@ -104,7 +106,7 @@ export function AnnotationLevelFilters({
           id,
           category:
             filters.selectedAnnotationCategories[0] ??
-            ANNOTATION_CATEGORIES[0],
+            categoryOptions[0] ?? ANNOTATION_CATEGORIES[0],
           operator: ">",
           value: "",
         },
@@ -248,7 +250,7 @@ export function AnnotationLevelFilters({
                   className={selectClassName}
                 >
                   <option value="">Select</option>
-                  {ANNOTATION_CATEGORIES.map((category) => (
+                  {categoryOptions.map((category) => (
                     <option key={category} value={category}>
                       {category}
                     </option>

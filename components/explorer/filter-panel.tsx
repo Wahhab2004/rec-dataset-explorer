@@ -17,6 +17,10 @@ type FilterPanelProps = {
   onFiltersChange: (filters: DatasetFilters) => void;
   onApply: () => void;
   onReset: () => void;
+  timeOfDayOptions?: readonly string[];
+  weatherOptions?: readonly string[];
+  installationLocationOptions?: readonly string[];
+  categoryOptions?: readonly AnnotationLevelFilterState["selectedAnnotationCategories"][number][];
 };
 
 export function FilterPanel({
@@ -26,6 +30,10 @@ export function FilterPanel({
   onFiltersChange,
   onApply,
   onReset,
+  timeOfDayOptions,
+  weatherOptions,
+  installationLocationOptions,
+  categoryOptions,
 }: FilterPanelProps) {
   const filtersAreValid = areDatasetFiltersValid(filters);
 
@@ -74,6 +82,9 @@ export function FilterPanel({
           <ImageLevelFilters
             filters={filters}
             onChange={updateImageLevelFilters}
+            timeOfDayOptions={timeOfDayOptions}
+            weatherOptions={weatherOptions}
+            installationLocationOptions={installationLocationOptions}
           />
         </section>
 
@@ -97,6 +108,7 @@ export function FilterPanel({
             categorySearch={categorySearch}
             onCategorySearchChange={onCategorySearchChange}
             onChange={updateAnnotationLevelFilters}
+            categoryOptions={categoryOptions}
           />
         </section>
       </div>

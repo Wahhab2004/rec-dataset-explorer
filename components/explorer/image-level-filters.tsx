@@ -11,6 +11,9 @@ import {
 type ImageLevelFiltersProps = {
   filters: ImageLevelFilterState;
   onChange: (filters: ImageLevelFilterState) => void;
+  timeOfDayOptions?: readonly string[];
+  weatherOptions?: readonly string[];
+  installationLocationOptions?: readonly string[];
 };
 
 const selectClassName =
@@ -36,6 +39,9 @@ function normalizeTags(tags: readonly string[]) {
 export function ImageLevelFilters({
   filters,
   onChange,
+  timeOfDayOptions = TIME_OF_DAY_OPTIONS,
+  weatherOptions = WEATHER_OPTIONS,
+  installationLocationOptions = INSTALLATION_LOCATION_OPTIONS,
 }: ImageLevelFiltersProps) {
   return (
     <div className="space-y-3">
@@ -57,7 +63,7 @@ export function ImageLevelFilters({
           className={selectClassName}
         >
           <option value="">Any time</option>
-          {TIME_OF_DAY_OPTIONS.map((option) => (
+          {timeOfDayOptions.map((option) => (
             <option key={option} value={option}>
               {option}
             </option>
@@ -82,7 +88,7 @@ export function ImageLevelFilters({
           className={selectClassName}
         >
           <option value="">Any weather</option>
-          {WEATHER_OPTIONS.map((option) => (
+          {weatherOptions.map((option) => (
             <option key={option} value={option}>
               {option}
             </option>
@@ -111,7 +117,7 @@ export function ImageLevelFilters({
           className={selectClassName}
         >
           <option value="">Any position</option>
-          {INSTALLATION_LOCATION_OPTIONS.map((option) => (
+          {installationLocationOptions.map((option) => (
             <option key={option} value={option}>
               {option}
             </option>
