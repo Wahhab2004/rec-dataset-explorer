@@ -14,6 +14,7 @@ if TYPE_CHECKING:
     from app.models.dataset_class import DatasetClass
     from app.models.export_job import ExportJob
     from app.models.image import Image
+    from app.models.import_job import ImportJob
 
 
 class Dataset(Base):
@@ -63,5 +64,9 @@ class Dataset(Base):
     export_jobs: Mapped[list[ExportJob]] = relationship(
         back_populates="dataset",
         cascade="all, delete-orphan",
+        passive_deletes=True,
+    )
+    import_jobs: Mapped[list[ImportJob]] = relationship(
+        back_populates="dataset",
         passive_deletes=True,
     )
