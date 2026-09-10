@@ -1,17 +1,18 @@
 "use client";
 
 import { AlertTriangle } from "lucide-react";
-import { useState } from "react";
 
 import { Button } from "@/components/ui/button";
+import { UploadErrorList } from "@/components/upload/upload-error-list";
+import type { ImportValidationError } from "@/lib/api/dataset-imports";
 
 export function UploadValidationError({
+  errors,
   onTryAgain,
 }: {
+  errors: readonly ImportValidationError[];
   onTryAgain: () => void;
 }) {
-  const [showErrors, setShowErrors] = useState(false);
-
   return (
     <section className="space-y-5" aria-labelledby="upload-error-title">
       <div className="flex items-start gap-3">
@@ -21,33 +22,15 @@ export function UploadValidationError({
             Dataset validation failed
           </h2>
           <p className="mt-1 text-sm text-muted-foreground">
-            The prepared dataset has structural problems that must be fixed before uploading.
+            Fix the reported dataset problems before trying again.
           </p>
         </div>
       </div>
       <div className="rounded-lg border border-amber-500/30 bg-amber-500/5 p-3">
         <h3 className="text-sm font-semibold">Problems</h3>
-        {showErrors ? (
-          <ul className="mt-2 space-y-1 text-sm text-muted-foreground">
-            <li>- 12 images are missing annotation files</li>
-            <li>- 3 annotation files have no matching image</li>
-            <li>- Metadata file is missing required fields</li>
-          </ul>
-        ) : (
-          <p className="mt-2 text-sm text-muted-foreground">
-            Review the structural problems before trying again.
-          </p>
-        )}
+        <UploadErrorList errors={errors} />
       </div>
-      <div className="flex flex-wrap justify-end gap-2">
-        <Button
-          type="button"
-          variant="outline"
-          aria-expanded={showErrors}
-          onClick={() => setShowErrors((current) => !current)}
-        >
-          {showErrors ? "Hide Errors" : "View Errors"}
-        </Button>
+      <div className="flex justify-end">
         <Button type="button" onClick={onTryAgain}>
           Try Again
         </Button>

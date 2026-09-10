@@ -2,22 +2,29 @@
 
 import { Progress } from "@/components/ui/progress";
 
-const stages = [
-  "Uploading files",
-  "Validating file structure",
-  "Processing images",
-  "Processing annotation files",
-  "Loading metadata",
-  "Creating dataset records",
-] as const;
+const stageLabels: Record<string, string> = {
+  uploading: "Uploading files",
+  validating_structure: "Validating dataset",
+  creating_records: "Creating dataset records",
+  processing_images: "Processing images",
+  processing_annotations: "Processing annotations",
+  validated: "Dataset validated",
+  completed: "Completed",
+};
 
-export function UploadProgress({ step }: { step: number }) {
-  const progress = Math.min(Math.round((step / stages.length) * 100), 100);
-  const processedImages = Math.min(7_240, Math.round((progress / 100) * 7_240));
-  const processedAnnotations = Math.min(
-    7_240,
-    Math.round((progress / 100) * 7_240),
-  );
+export function UploadProgress({
+  progress,
+  stage,
+  processedImages,
+  totalImages,
+}: {
+  progress: number;
+  stage: string | null;
+  processedImages?: number | null;
+  totalImages?: number | null;
+}) {
+  const stageLabel = stageLabels[stage ?? ""] ?? "Processing dataset";
+  const hasCounts = processedImages != null && totalImages != null;
 
   return (
     <section className="space-y-5" aria-labelledby="upload-progress-title">
@@ -26,25 +33,23 @@ export function UploadProgress({ step }: { step: number }) {
           Uploading Dataset
         </h2>
         <p className="mt-1 text-sm text-muted-foreground">
-          Processing the prepared dataset in a mock upload flow.
+          Processing the prepared dataset.
         </p>
       </div>
       <div className="space-y-2">
         <Progress value={progress} aria-label={`Upload progress: ${progress}%`} />
         <div className="flex items-center justify-between gap-3 text-xs text-muted-foreground">
-          <span>{stages[Math.min(step, stages.length - 1)]}</span>
+          <span>{stageLabel}</span>
           <span>{progress}%</span>
         </div>
       </div>
-      <div className="grid gap-2 sm:grid-cols-2">
-        <div className="rounded-lg border bg-card px-3 py-2.5">
-          <p className="text-xs text-muted-foreground">Images processed</p>
-          <p className="mt-1 text-sm font-semibold">{processedImages.toLocaleString()} / 12,450</p>
-        </div>
-        <div className="rounded-lg border bg-card px-3 py-2.5">
-          <p className="text-xs text-muted-foreground">Annotation files processed</p>
-          <p className="mt-1 text-sm font-semibold">{processedAnnotations.toLocaleString()} / 12,450</p>
-        </div>
+      <div className="rounded-lg border bg-card px-3 py-2.5">
+        <p className="text-xs text-muted-foreground">Images processed</p>
+        <p className="mt-1 text-sm font-semibold">
+          {hasCounts
+            ? `${processedImages.toLocaleString()} / ${totalImages.toLocaleString()}`
+            : "Waiting for backend status"}
+        </p>
       </div>
       <p className="rounded-lg border bg-muted/40 px-3 py-2.5 text-xs text-muted-foreground">
         The original dataset will remain unchanged.
