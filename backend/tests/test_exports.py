@@ -48,16 +48,43 @@ def export_context(tmp_path_factory: pytest.TempPathFactory) -> Generator[dict[s
             file_name="two.jpg", file_path="datasets/source/images/two.jpg", annotation_path="datasets/source/labels/two.txt",
             time_of_day="nighttime", weather="rainy", installation_location="rear", location="Hsinchu", tags=["wet-road"], dataset=dataset,
         )
-        Annotation(image=image_one, dataset_class=person, x_center=.5, y_center=.5, width=.2, height=.3, area=.06)
-        Annotation(image=image_one, dataset_class=car, x_center=.4, y_center=.6, width=.1, height=.2, area=.02)
-        Annotation(image=image_two, dataset_class=person, x_center=.3, y_center=.4, width=.4, height=.4, area=.16)
-        session.add(dataset)
+        other_dataset = Dataset(name="Other Export Dataset")
+        other_class = DatasetClass(class_index=0, class_name="person", dataset=other_dataset)
+        other_image = Image(
+            file_name="other.jpg",
+            file_path="datasets/other/images/other.jpg",
+            annotation_path="datasets/other/labels/other.txt",
+            dataset=other_dataset,
+        )
+        person_annotation = Annotation(image=image_one, dataset_class=person, x_center=.5, y_center=.5, width=.2, height=.3, area=.06)
+        car_annotation = Annotation(image=image_one, dataset_class=car, x_center=.4, y_center=.6, width=.1, height=.2, area=.02)
+        other_image_annotation = Annotation(image=image_two, dataset_class=person, x_center=.3, y_center=.4, width=.4, height=.4, area=.16)
+        other_dataset_annotation = Annotation(
+            image=other_image,
+            dataset_class=other_class,
+            x_center=.2,
+            y_center=.2,
+            width=.1,
+            height=.1,
+            area=.01,
+        )
+        session.add_all([dataset, other_dataset])
         session.commit()
         dataset_id, image_one_id, image_two_id = dataset.id, image_one.id, image_two.id
+        annotation_ids = {
+            "person": person_annotation.id,
+            "car": car_annotation.id,
+            "other_image": other_image_annotation.id,
+            "other_dataset": other_dataset_annotation.id,
+        }
 
     storage.create_dataset_directories(dataset_id)
     storage.image_path(dataset_id, "one.jpg").write_bytes(b"one-image")
     storage.image_path(dataset_id, "two.jpg").write_bytes(b"two-image")
+    storage.annotation_path(dataset_id, "one.txt").write_text(
+        "0 0.500 0.500 0.200 0.300\n2 0.400 0.600 0.100 0.200\n",
+        encoding="utf-8",
+    )
 
     def override_get_db() -> Generator[Session, None, None]:
         with SessionLocal() as session:
@@ -66,7 +93,13 @@ def export_context(tmp_path_factory: pytest.TempPathFactory) -> Generator[dict[s
     app.dependency_overrides[get_db] = override_get_db
     app.dependency_overrides[get_storage_service] = lambda: storage
     try:
-        yield {"dataset_id": dataset_id, "image_one_id": image_one_id, "image_two_id": image_two_id}
+        yield {
+            "dataset_id": dataset_id,
+            "image_one_id": image_one_id,
+            "image_two_id": image_two_id,
+            "annotation_ids": annotation_ids,
+            "source_label": storage.annotation_path(dataset_id, "one.txt"),
+        }
     finally:
         app.dependency_overrides.clear()
         Base.metadata.drop_all(engine)
@@ -135,6 +168,70 @@ def test_bbox_filter_writes_only_matching_annotation(
         "filters": {"annotationFilters": {"bbox": {"area": {"operator": "gt", "value": 0.03}}}},
     })
     assert get_zip(client, export_id).read("labels/one.txt").decode() == "0 0.500 0.500 0.200 0.300"
+
+
+def test_excluded_annotation_is_removed_and_source_data_is_unchanged(
+    client: TestClient,
+    export_context: dict[str, object],
+) -> None:
+    source_before = export_context["source_label"].read_bytes()
+    detail_before = client.get(
+        f"/api/v1/datasets/{export_context['dataset_id']}"
+        f"/images/{export_context['image_one_id']}"
+    ).json()
+
+    export_id, status = create_export(client, export_context["dataset_id"], {
+        "exportType": "annotations_only",
+        "selection": {"mode": "explicit", "imageIds": [str(export_context["image_one_id"])]},
+        "excludedAnnotationIds": [str(export_context["annotation_ids"]["person"])],
+    })
+
+    assert status["status"] == "completed"
+    assert get_zip(client, export_id).read("labels/one.txt").decode() == "2 0.400 0.600 0.100 0.200"
+    assert export_context["source_label"].read_bytes() == source_before
+    assert client.get(
+        f"/api/v1/datasets/{export_context['dataset_id']}"
+        f"/images/{export_context['image_one_id']}"
+    ).json()["annotations"] == detail_before["annotations"]
+
+
+def test_multiple_duplicate_exclusions_generate_empty_label(
+    client: TestClient,
+    export_context: dict[str, object],
+) -> None:
+    annotation_ids = export_context["annotation_ids"]
+    export_id, status = create_export(client, export_context["dataset_id"], {
+        "exportType": "annotations_only",
+        "selection": {"mode": "explicit", "imageIds": [str(export_context["image_one_id"])]},
+        "excludedAnnotationIds": [
+            str(annotation_ids["person"]),
+            str(annotation_ids["car"]),
+            str(annotation_ids["person"]),
+        ],
+    })
+
+    assert status["status"] == "completed"
+    assert get_zip(client, export_id).read("labels/one.txt").decode() == ""
+
+
+def test_invalid_or_unselected_annotation_exclusion_fails_export(
+    client: TestClient,
+    export_context: dict[str, object],
+) -> None:
+    for annotation_id in (
+        uuid4(),
+        export_context["annotation_ids"]["other_image"],
+        export_context["annotation_ids"]["other_dataset"],
+    ):
+        response = client.post(f"/api/v1/datasets/{export_context['dataset_id']}/exports", json={
+            "exportType": "annotations_only",
+            "selection": {"mode": "explicit", "imageIds": [str(export_context["image_one_id"])]},
+            "excludedAnnotationIds": [str(annotation_id)],
+        })
+        assert response.status_code == 202
+        status = client.get(f"/api/v1/exports/{response.json()['exportId']}" ).json()
+        assert status["status"] == "failed"
+        assert status["error"]["code"] == "INVALID_ANNOTATION_ID"
 
 
 def test_complete_package_metadata_and_download_errors(client: TestClient, export_context: dict[str, object]) -> None:

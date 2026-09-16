@@ -94,12 +94,28 @@ def image_detail_context() -> Generator[dict[str, object], None, None]:
             f"{annotation_row.height:.3f}"
             for annotation_row in annotations_by_id
         )
+        annotation_details = [
+            {
+                "id": str(annotation_row.id),
+                "category": "person" if annotation_row.class_id == person.id else "car",
+                "classIndex": class_index_by_id[annotation_row.class_id],
+                "xCenter": annotation_row.x_center,
+                "yCenter": annotation_row.y_center,
+                "width": annotation_row.width,
+                "height": annotation_row.height,
+                "area": annotation_row.area,
+            }
+            for annotation_row in annotations_by_id
+        ]
         context = {
             "dataset_id": dataset.id,
             "other_dataset_id": other_dataset.id,
             "image_id": image.id,
             "other_image_id": other_image.id,
+            "person_annotation_id": person_annotation.id,
+            "car_annotation_id": car_annotation.id,
             "expected_content": expected_content,
+            "annotation_details": annotation_details,
         }
 
     def override_get_db() -> Generator[Session, None, None]:
@@ -159,6 +175,7 @@ def test_image_detail_returns_metadata_summary_and_yolo_content(
             "fileName": "image_000123.txt",
             "content": image_detail_context["expected_content"],
         },
+        "annotations": image_detail_context["annotation_details"],
     }
 
 

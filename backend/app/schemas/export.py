@@ -30,6 +30,10 @@ class ExportRequest(BaseModel):
     export_type: ExportType = Field(alias="exportType")
     selection: ExportSelection
     filters: ExportFilters = Field(default_factory=ExportFilters)
+    excluded_annotation_ids: list[UUID] = Field(
+        default_factory=list,
+        alias="excludedAnnotationIds",
+    )
 
 
 class ExportAcceptedResponse(BaseModel):

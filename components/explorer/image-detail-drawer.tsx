@@ -5,17 +5,32 @@ import { X } from "lucide-react"
 
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
-import { BackendImage } from "@/components/explorer/backend-image"
 import type { ImageDetail } from "@/lib/api/datasets"
+import { resolveBackendFileUrl } from "@/lib/api/file-url"
+
+function displayCategory(category: string) {
+  return category.replace(/[-_]/g, " ").replace(/\b\w/g, (character) => character.toUpperCase())
+}
+
+function formatArea(area: number) {
+  return area.toFixed(4)
+}
 
 export function ImageDetailDrawer({
   image,
+  excludedAnnotationIds,
+  onToggleAnnotation,
+  onRestoreAll,
   onClose,
 }: {
   image: ImageDetail | null
+  excludedAnnotationIds: Set<string>
+  onToggleAnnotation: (annotationId: string) => void
+  onRestoreAll: () => void
   onClose: () => void
 }) {
   const [showTxt, setShowTxt] = useState(false)
+  const [activeAnnotationId, setActiveAnnotationId] = useState<string | null>(null)
 
   useEffect(() => {
     if (!image) {
@@ -36,6 +51,16 @@ export function ImageDetailDrawer({
     return null
   }
 
+  const annotationsByCategory = (() => {
+    const counts = new Map<string, number>()
+    return image.annotations.map((annotation) => {
+      const nextCount = (counts.get(annotation.category) ?? 0) + 1
+      counts.set(annotation.category, nextCount)
+      return { annotation, number: nextCount }
+    })
+  })()
+  const excludedCount = image.annotations.filter((annotation) => excludedAnnotationIds.has(annotation.id)).length
+  const imageUrl = resolveBackendFileUrl(image.imageUrl)
 
   function closeDrawer() {
     setShowTxt(false)
@@ -84,8 +109,33 @@ export function ImageDetailDrawer({
             >
               Original image preview
             </h3>
-            <div className="grid aspect-4/3 place-items-center rounded-lg border bg-muted/70">
-              <BackendImage src={image.imageUrl} alt={image.fileName} />
+            <div className="flex min-h-48 items-center justify-center overflow-hidden rounded-lg border bg-muted/70 p-2">
+              {imageUrl ? (
+                <div className="relative inline-block max-h-80 max-w-full leading-none">
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img src={imageUrl} alt={image.fileName} className="block max-h-80 max-w-full object-contain" />
+                  {activeAnnotationId ? (() => {
+                    const annotation = image.annotations.find(({ id }) => id === activeAnnotationId)
+                    if (!annotation) {
+                      return null
+                    }
+                    return (
+                      <div
+                        aria-hidden="true"
+                        className="pointer-events-none absolute border-2 border-amber-400 bg-amber-300/15 shadow-[0_0_0_1px_rgba(255,255,255,0.8)]"
+                        style={{
+                          left: `${(annotation.xCenter - annotation.width / 2) * 100}%`,
+                          top: `${(annotation.yCenter - annotation.height / 2) * 100}%`,
+                          width: `${annotation.width * 100}%`,
+                          height: `${annotation.height * 100}%`,
+                        }}
+                      />
+                    )
+                  })() : null}
+                </div>
+              ) : (
+                <p className="px-4 py-12 text-sm text-muted-foreground">Image preview unavailable.</p>
+              )}
             </div>
           </section>
 
@@ -159,6 +209,60 @@ export function ImageDetailDrawer({
                   ))}
                 </tbody>
               </table>
+            </div>
+          </section>
+
+          <section aria-labelledby="annotations-title">
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <h3 id="annotations-title" className="text-sm font-semibold">Annotations</h3>
+                <p className="mt-1 text-xs text-muted-foreground">
+                  {image.annotations.length} annotations · {excludedCount} excluded from export
+                </p>
+              </div>
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                onClick={onRestoreAll}
+                disabled={excludedCount === 0}
+              >
+                Restore All
+              </Button>
+            </div>
+            <p className="mt-2 rounded-lg border bg-muted/30 px-3 py-2 text-xs text-muted-foreground">
+              Excluded annotations are removed only from the exported dataset. The original dataset remains unchanged.
+            </p>
+            <div className="mt-3 space-y-2">
+              {annotationsByCategory.map(({ annotation, number }) => {
+                const isExcluded = excludedAnnotationIds.has(annotation.id)
+                const isActive = activeAnnotationId === annotation.id
+                return (
+                  <button
+                    key={annotation.id}
+                    type="button"
+                    className={`flex w-full items-center justify-between gap-3 rounded-lg border px-3 py-2 text-left outline-none transition-colors focus-visible:ring-2 focus-visible:ring-ring ${isActive ? "border-amber-400 bg-amber-50" : "hover:bg-muted/50"}`}
+                    onMouseEnter={() => setActiveAnnotationId(annotation.id)}
+                    onFocus={() => setActiveAnnotationId(annotation.id)}
+                    onClick={() => {
+                      setActiveAnnotationId(annotation.id)
+                      onToggleAnnotation(annotation.id)
+                    }}
+                  >
+                    <span className="min-w-0">
+                      <span className="block truncate text-sm font-medium">
+                        {displayCategory(annotation.category)} #{number}
+                      </span>
+                      <span className="mt-0.5 block text-xs text-muted-foreground">
+                        {annotation.width.toFixed(2)} × {annotation.height.toFixed(2)} · area {formatArea(annotation.area)}
+                      </span>
+                    </span>
+                    <span className={`shrink-0 text-xs font-semibold ${isExcluded ? "text-amber-700" : "text-emerald-700"}`}>
+                      {isExcluded ? "Exclude from Export" : "Keep"}
+                    </span>
+                  </button>
+                )
+              })}
             </div>
           </section>
 

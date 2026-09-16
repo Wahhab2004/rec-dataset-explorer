@@ -61,6 +61,12 @@ def create_export(
         images = list(db.scalars(select(Image).where(Image.id.in_(image_ids))).all())
         classes = list(db.scalars(select(DatasetClass).where(DatasetClass.dataset_id == dataset_id)).all())
         class_by_id = {item.id: item for item in classes}
+        excluded_annotation_ids = _validate_excluded_annotation_ids(
+            db,
+            dataset_id,
+            image_ids,
+            request.excluded_annotation_ids,
+        )
         annotations = list(
             db.scalars(select(Annotation).where(Annotation.image_id.in_(image_ids))).all()
         )
@@ -78,6 +84,11 @@ def create_export(
                     class_by_id,
                     request,
                 )
+                matching_annotations = [
+                    annotation
+                    for annotation in matching_annotations
+                    if annotation.id not in excluded_annotation_ids
+                ]
                 label_name = f"{PurePosixPath(image.file_name).stem}.txt"
                 label_content = _yolo_content(matching_annotations, class_by_id)
                 if request.export_type in {"images_and_annotations", "complete_dataset"}:
@@ -137,6 +148,36 @@ def create_export(
             db.commit()
             db.refresh(job)
         return job
+
+
+def _validate_excluded_annotation_ids(
+    db: Session,
+    dataset_id: UUID,
+    image_ids: list[UUID],
+    excluded_annotation_ids: list[UUID],
+) -> set[UUID]:
+    unique_ids = set(excluded_annotation_ids)
+    if not unique_ids:
+        return set()
+
+    annotations = list(
+        db.scalars(
+            select(Annotation)
+            .join(Image, Image.id == Annotation.image_id)
+            .where(
+                Annotation.id.in_(unique_ids),
+                Image.dataset_id == dataset_id,
+            ),
+        ).all()
+    )
+    if len(annotations) != len(unique_ids) or any(
+        annotation.image_id not in image_ids for annotation in annotations
+    ):
+        raise ExportInputError(
+            "INVALID_ANNOTATION_ID",
+            "Every excluded annotation must belong to an image included in the export",
+        )
+    return unique_ids
 
 
 def _resolve_image_ids(db: Session, dataset_id: UUID, request: ExportRequest) -> list[UUID]:

@@ -38,6 +38,8 @@ type DatasetExplorerProps = {
   datasetId: string;
 };
 
+type AnnotationExclusions = Record<string, Set<string>>;
+
 function displayOption(value: string) {
   return value
     .replace(/[-_]/g, " ")
@@ -80,6 +82,7 @@ export function DatasetExplorer({ datasetId }: DatasetExplorerProps) {
     () => new Set(),
   );
   const [imageDetail, setImageDetail] = useState<ImageDetail | null>(null);
+  const [annotationExclusions, setAnnotationExclusions] = useState<AnnotationExclusions>({});
   const [isDetailLoading, setIsDetailLoading] = useState(false);
   const [detailError, setDetailError] = useState<string | null>(null);
   const [isExportOpen, setIsExportOpen] = useState(false);
@@ -225,6 +228,39 @@ export function DatasetExplorer({ datasetId }: DatasetExplorerProps) {
       .finally(() => setIsDetailLoading(false));
   }
 
+  function handleToggleAnnotation(imageId: string, annotationId: string) {
+    setAnnotationExclusions((currentExclusions) => {
+      const nextExclusions = { ...currentExclusions };
+      const imageExclusions = new Set(nextExclusions[imageId] ?? []);
+
+      if (imageExclusions.has(annotationId)) {
+        imageExclusions.delete(annotationId);
+      } else {
+        imageExclusions.add(annotationId);
+      }
+
+      if (imageExclusions.size === 0) {
+        delete nextExclusions[imageId];
+      } else {
+        nextExclusions[imageId] = imageExclusions;
+      }
+
+      return nextExclusions;
+    });
+  }
+
+  function handleRestoreAnnotationExclusions(imageId: string) {
+    setAnnotationExclusions((currentExclusions) => {
+      if (!(imageId in currentExclusions)) {
+        return currentExclusions;
+      }
+
+      const nextExclusions = { ...currentExclusions };
+      delete nextExclusions[imageId];
+      return nextExclusions;
+    });
+  }
+
   if (isDatasetLoading || dataset?.id !== datasetId) {
     return (
       <div className="grid min-h-[calc(100svh-7.25rem)] place-items-center px-6 py-12 text-sm text-muted-foreground">
@@ -255,6 +291,12 @@ export function DatasetExplorer({ datasetId }: DatasetExplorerProps) {
   const allVisibleImagesSelected =
     images.length > 0 && images.every((image) => selectedImageIds.has(image.id));
   const imageLabel = totalResults === 1 ? "image" : "images";
+  const exportExcludedAnnotationIds = Array.from(
+    new Set(
+      Array.from(exportAllFiltered ? new Set(images.map((image) => image.id)) : selectedImageIds)
+        .flatMap((imageId) => Array.from(annotationExclusions[imageId] ?? [])),
+    ),
+  );
 
   return (
     <div className="min-h-svh">
@@ -322,7 +364,7 @@ export function DatasetExplorer({ datasetId }: DatasetExplorerProps) {
           <div className="mt-3"><ActiveFilterChips filters={activeFilters} onRemove={handleRemoveFilter} /></div>
 
           <div className="mt-4">
-            {selectedImageIds.size > 0 ? <SelectionToolbar count={selectedImageIds.size} onClear={() => setSelectedImageIds(new Set())} onExport={() => setIsExportOpen(true)} /> : null}
+            {selectedImageIds.size > 0 ? <SelectionToolbar count={selectedImageIds.size} onClear={() => setSelectedImageIds(new Set())} onExport={() => { setExportAllFiltered(false); setIsExportOpen(true); }} /> : null}
             <div className="mb-3 flex items-center justify-between gap-3">
               <p className="text-xs text-muted-foreground">{selectedImageIds.size > 0 ? `${selectedImageIds.size.toLocaleString()} selected across visible results` : "Select images to prepare a dataset"}</p>
               <div className="flex flex-wrap justify-end gap-2">
@@ -344,8 +386,23 @@ export function DatasetExplorer({ datasetId }: DatasetExplorerProps) {
 
       {isDetailLoading ? <div className="fixed inset-0 z-50 grid place-items-center bg-foreground/20 p-4"><div className="rounded-lg border bg-card px-4 py-3 text-sm shadow-lg">Loading image details...</div></div> : null}
       {detailError ? <div role="alert" className="fixed right-4 bottom-4 z-50 flex max-w-sm items-center gap-3 rounded-lg border border-destructive/30 bg-card px-3 py-2.5 text-sm shadow-lg"><span className="text-destructive">{detailError}</span><Button type="button" variant="ghost" size="icon-sm" aria-label="Close image detail error" onClick={() => setDetailError(null)}><X aria-hidden="true" /></Button></div> : null}
-      <ImageDetailDrawer image={imageDetail} onClose={() => setImageDetail(null)} />
-      {isExportOpen ? <ExportDatasetModal datasetId={datasetId} selectedImageIds={Array.from(selectedImageIds)} selectedCount={exportAllFiltered ? totalResults : selectedImageIds.size} datasetName={dataset.name} appliedFilters={appliedFilters} selectionMode={exportAllFiltered ? "all_filtered" : "explicit"} onClose={() => { setIsExportOpen(false); setExportAllFiltered(false); }} /> : null}
+      <ImageDetailDrawer
+        key={imageDetail?.id ?? "closed"}
+        image={imageDetail}
+        excludedAnnotationIds={imageDetail ? annotationExclusions[imageDetail.id] ?? new Set() : new Set()}
+        onToggleAnnotation={(annotationId) => {
+          if (imageDetail) {
+            handleToggleAnnotation(imageDetail.id, annotationId);
+          }
+        }}
+        onRestoreAll={() => {
+          if (imageDetail) {
+            handleRestoreAnnotationExclusions(imageDetail.id);
+          }
+        }}
+        onClose={() => setImageDetail(null)}
+      />
+      {isExportOpen ? <ExportDatasetModal datasetId={datasetId} selectedImageIds={Array.from(selectedImageIds)} selectedCount={exportAllFiltered ? totalResults : selectedImageIds.size} datasetName={dataset.name} appliedFilters={appliedFilters} selectionMode={exportAllFiltered ? "all_filtered" : "explicit"} excludedAnnotationIds={exportExcludedAnnotationIds} onClose={() => { setIsExportOpen(false); setExportAllFiltered(false); }} /> : null}
     </div>
   );
 }

@@ -201,12 +201,29 @@ Important behavior:
       "count": 4
     }
   ],
+  "annotations": [
+    {
+      "id": "annotation-uuid",
+      "category": "person",
+      "classIndex": 6,
+      "xCenter": 0.42,
+      "yCenter": 0.31,
+      "width": 0.08,
+      "height": 0.21,
+      "area": 0.0168
+    }
+  ],
   "annotationFile": {
     "fileName": "image_000123.txt",
     "content": "0 0.512 0.431 0.120 0.350\n..."
   }
 }
 ```
+
+The `annotations` array exposes each annotation's database UUID as its canonical
+identity. Annotation identity is not based on array position, class name,
+display label, or a reconstructed YOLO row. The existing `metadata`,
+`annotationSummary`, and `annotationFile` fields remain available.
 
 Do not return detection confidence unless it is explicitly added to the product requirements later.
 
@@ -318,6 +335,7 @@ Exactly three export types are supported:
     "mode": "explicit",
     "imageIds": ["uuid-1", "uuid-2"]
   },
+  "excludedAnnotationIds": ["annotation-uuid-2", "annotation-uuid-4"],
   "filters": {
     "imageFilters": {
       "timeOfDay": ["nighttime"]
@@ -336,6 +354,18 @@ Exactly three export types are supported:
   }
 }
 ```
+
+`excludedAnnotationIds` is optional. When missing or empty, export behavior is
+unchanged. When supplied, every ID must exist, belong to the requested dataset,
+and belong to an image included in the resolved export selection. Invalid IDs,
+annotations from another dataset, and annotations from an image not included in
+the export are rejected. Duplicate IDs are harmless and are normalized.
+
+Exclusions are applied after the existing image and annotation filters. The
+export contains regenerated YOLO TXT files with only the retained annotations.
+If all annotations for an explicitly selected image are excluded, the image is
+kept and its generated TXT file is empty. The source database annotations and
+original TXT files are never modified or deleted.
 
 #### Request selecting all filtered results
 

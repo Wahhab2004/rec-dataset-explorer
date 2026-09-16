@@ -153,12 +153,24 @@ export type DatasetSearchResponse = {
   items: DatasetSearchItem[];
 };
 
+export type ImageAnnotation = {
+  id: string;
+  category: string;
+  classIndex: number;
+  xCenter: number;
+  yCenter: number;
+  width: number;
+  height: number;
+  area: number;
+};
+
 export type ImageDetail = {
   id: string;
   fileName: string;
   imageUrl: string;
   metadata: DatasetSearchItem["metadata"];
   annotationSummary: DatasetSearchItem["annotationSummary"];
+  annotations: ImageAnnotation[];
   annotationFile: {
     fileName: string;
     content: string;

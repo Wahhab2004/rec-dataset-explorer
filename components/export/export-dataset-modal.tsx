@@ -142,6 +142,7 @@ export function ExportDatasetModal({
   datasetName,
   appliedFilters,
   selectionMode,
+  excludedAnnotationIds,
   onClose,
 }: {
   datasetId: string;
@@ -150,6 +151,7 @@ export function ExportDatasetModal({
   datasetName: string;
   appliedFilters: DatasetFilters;
   selectionMode: "explicit" | "all_filtered";
+  excludedAnnotationIds: string[];
   onClose: () => void;
 }) {
   const [stage, setStage] = useState<ExportStage>("configure");
@@ -226,13 +228,17 @@ export function ExportDatasetModal({
     setStage("progress");
 
     try {
-      const response = await createExport(datasetId, {
+      const request = {
         exportType: getExportType(exportMode),
         selection:
           selectionMode === "all_filtered"
-            ? { mode: "all_filtered" }
-            : { mode: "explicit", imageIds: selectedImageIds },
+            ? { mode: "all_filtered" as const }
+            : { mode: "explicit" as const, imageIds: selectedImageIds },
         filters: toBackendExportFilters(appliedFilters),
+        ...(excludedAnnotationIds.length > 0 ? { excludedAnnotationIds } : {}),
+      };
+      const response = await createExport(datasetId, {
+        ...request,
       });
       setExportId(response.exportId);
     } catch (error) {

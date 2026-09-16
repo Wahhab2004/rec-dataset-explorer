@@ -14,6 +14,7 @@ export type CreateExportRequest = {
   exportType: ExportType;
   selection: ExportSelection;
   filters: Pick<SearchRequest, "imageFilters" | "annotationFilters">;
+  excludedAnnotationIds?: string[];
 };
 
 export type ExportStatusResponse = {

@@ -10,7 +10,7 @@ from app.models.annotation import Annotation
 from app.models.dataset import Dataset
 from app.models.dataset_class import DatasetClass
 from app.models.image import Image
-from app.schemas.image import AnnotationFile, ImageDetail
+from app.schemas.image import AnnotationDetail, AnnotationFile, ImageDetail
 from app.schemas.search import AnnotationSummary, ImageMetadata
 from app.services.dataset_service import DatasetNotFoundError
 from app.services.storage_service import StorageService
@@ -41,6 +41,7 @@ def get_image_detail(
         raise ImageNotFoundError(image_id)
 
     summary = _get_annotation_summary(db, image_id)
+    annotations = _get_annotations(db, image_id)
     annotation_file = _get_annotation_file(db, image)
 
     return ImageDetail(
@@ -56,6 +57,7 @@ def get_image_detail(
         ),
         annotationSummary=summary,
         annotationFile=annotation_file,
+        annotations=annotations,
     )
 
 
@@ -77,6 +79,41 @@ def _get_annotation_summary(
     return [
         AnnotationSummary(category=class_name, count=count)
         for class_name, count, _ in db.execute(statement).all()
+    ]
+
+
+def _get_annotations(
+    db: Session,
+    image_id: UUID,
+) -> list[AnnotationDetail]:
+    statement = (
+        select(
+            Annotation.id,
+            DatasetClass.class_name,
+            DatasetClass.class_index,
+            Annotation.x_center,
+            Annotation.y_center,
+            Annotation.width,
+            Annotation.height,
+            Annotation.area,
+        )
+        .join(DatasetClass, DatasetClass.id == Annotation.class_id)
+        .where(Annotation.image_id == image_id)
+        .order_by(Annotation.id)
+    )
+    return [
+        AnnotationDetail(
+            id=annotation_id,
+            category=class_name,
+            classIndex=class_index,
+            xCenter=x_center,
+            yCenter=y_center,
+            width=width,
+            height=height,
+            area=area,
+        )
+        for annotation_id, class_name, class_index, x_center, y_center, width, height, area
+        in db.execute(statement).all()
     ]
 
 
