@@ -1,7 +1,7 @@
 "use client"
 
-import { useEffect, useState } from "react"
-import { X } from "lucide-react"
+import { useEffect, useRef, useState } from "react"
+import { Check, Eye, EyeOff, X } from "lucide-react"
 
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -30,7 +30,10 @@ export function ImageDetailDrawer({
   onClose: () => void
 }) {
   const [showTxt, setShowTxt] = useState(false)
+  const [showAnnotations, setShowAnnotations] = useState(false)
   const [activeAnnotationId, setActiveAnnotationId] = useState<string | null>(null)
+  const [hoveredAnnotationId, setHoveredAnnotationId] = useState<string | null>(null)
+  const annotationRowRefs = useRef(new Map<string, HTMLDivElement>())
 
   useEffect(() => {
     if (!image) {
@@ -47,6 +50,17 @@ export function ImageDetailDrawer({
     return () => document.removeEventListener("keydown", handleKeyDown)
   }, [image, onClose])
 
+  useEffect(() => {
+    if (!activeAnnotationId) {
+      return
+    }
+
+    annotationRowRefs.current.get(activeAnnotationId)?.scrollIntoView({
+      behavior: "smooth",
+      block: "nearest",
+    })
+  }, [activeAnnotationId])
+
   if (!image) {
     return null
   }
@@ -61,6 +75,10 @@ export function ImageDetailDrawer({
   })()
   const excludedCount = image.annotations.filter((annotation) => excludedAnnotationIds.has(annotation.id)).length
   const imageUrl = resolveBackendFileUrl(image.imageUrl)
+
+  function selectAnnotation(annotationId: string) {
+    setActiveAnnotationId(annotationId)
+  }
 
   function closeDrawer() {
     setShowTxt(false)
@@ -114,24 +132,36 @@ export function ImageDetailDrawer({
                 <div className="relative inline-block max-h-80 max-w-full leading-none">
                   {/* eslint-disable-next-line @next/next/no-img-element */}
                   <img src={imageUrl} alt={image.fileName} className="block max-h-80 max-w-full object-contain" />
-                  {activeAnnotationId ? (() => {
-                    const annotation = image.annotations.find(({ id }) => id === activeAnnotationId)
-                    if (!annotation) {
-                      return null
-                    }
+                  {showAnnotations ? image.annotations.map((annotation) => {
+                    const isExcluded = excludedAnnotationIds.has(annotation.id)
+                    const isSelected = activeAnnotationId === annotation.id
+                    const isHovered = hoveredAnnotationId === annotation.id
+                    const zIndex = isSelected ? 30 : isHovered ? 20 : 10
                     return (
-                      <div
-                        aria-hidden="true"
-                        className="pointer-events-none absolute border-2 border-amber-400 bg-amber-300/15 shadow-[0_0_0_1px_rgba(255,255,255,0.8)]"
+                      <button
+                        key={annotation.id}
+                        type="button"
+                        aria-label={`${displayCategory(annotation.category)} annotation${isExcluded ? ", excluded" : ""}`}
+                        className={`absolute overflow-visible border-2 text-left outline-none transition-[border-color,opacity,box-shadow] focus-visible:ring-2 focus-visible:ring-amber-300 ${isExcluded ? "border-dashed border-amber-500/80 bg-amber-300/10 opacity-65" : "border-emerald-400/90 bg-emerald-300/10"} ${isSelected ? "border-amber-400 bg-amber-300/25 opacity-100 shadow-[0_0_0_2px_rgba(255,255,255,0.9)]" : ""}`}
                         style={{
                           left: `${(annotation.xCenter - annotation.width / 2) * 100}%`,
                           top: `${(annotation.yCenter - annotation.height / 2) * 100}%`,
                           width: `${annotation.width * 100}%`,
                           height: `${annotation.height * 100}%`,
+                          zIndex,
                         }}
-                      />
+                        onMouseEnter={() => setHoveredAnnotationId(annotation.id)}
+                        onMouseLeave={() => setHoveredAnnotationId(null)}
+                        onFocus={() => setHoveredAnnotationId(annotation.id)}
+                        onBlur={() => setHoveredAnnotationId(null)}
+                        onClick={() => selectAnnotation(annotation.id)}
+                      >
+                        <span className={`absolute left-0 top-0 -translate-y-full whitespace-nowrap rounded px-1 py-0.5 text-[10px] font-semibold leading-none ${isExcluded ? "bg-amber-100 text-amber-900" : "bg-emerald-100 text-emerald-900"}`}>
+                          {displayCategory(annotation.category)}{isExcluded ? " · Excluded" : ""}
+                        </span>
+                      </button>
                     )
-                  })() : null}
+                  }) : null}
                 </div>
               ) : (
                 <p className="px-4 py-12 text-sm text-muted-foreground">Image preview unavailable.</p>
@@ -212,6 +242,27 @@ export function ImageDetailDrawer({
             </div>
           </section>
 
+          <section aria-labelledby="annotation-preview-title">
+            <div className="flex items-center justify-between gap-3 rounded-lg border px-3 py-2.5">
+              <div>
+                <h3 id="annotation-preview-title" className="text-sm font-semibold">Show Annotations</h3>
+                <p className="mt-0.5 text-xs text-muted-foreground">
+                  {showAnnotations ? "Bounding boxes are visible on the image." : "The original image is shown without overlays."}
+                </p>
+              </div>
+              <Button
+                type="button"
+                variant={showAnnotations ? "secondary" : "outline"}
+                size="sm"
+                aria-pressed={showAnnotations}
+                onClick={() => setShowAnnotations((current) => !current)}
+              >
+                {showAnnotations ? <EyeOff data-icon="inline-start" /> : <Eye data-icon="inline-start" />}
+                {showAnnotations ? "Hide" : "Show"}
+              </Button>
+            </div>
+          </section>
+
           <section aria-labelledby="annotations-title">
             <div className="flex items-start justify-between gap-3">
               <div>
@@ -238,29 +289,58 @@ export function ImageDetailDrawer({
                 const isExcluded = excludedAnnotationIds.has(annotation.id)
                 const isActive = activeAnnotationId === annotation.id
                 return (
-                  <button
+                  <div
                     key={annotation.id}
-                    type="button"
-                    className={`flex w-full items-center justify-between gap-3 rounded-lg border px-3 py-2 text-left outline-none transition-colors focus-visible:ring-2 focus-visible:ring-ring ${isActive ? "border-amber-400 bg-amber-50" : "hover:bg-muted/50"}`}
-                    onMouseEnter={() => setActiveAnnotationId(annotation.id)}
-                    onFocus={() => setActiveAnnotationId(annotation.id)}
-                    onClick={() => {
-                      setActiveAnnotationId(annotation.id)
-                      onToggleAnnotation(annotation.id)
+                    ref={(element) => {
+                      if (element) {
+                        annotationRowRefs.current.set(annotation.id, element)
+                      } else {
+                        annotationRowRefs.current.delete(annotation.id)
+                      }
                     }}
+                    className={`flex w-full items-center justify-between gap-3 rounded-lg border px-3 py-2 text-left outline-none transition-colors focus-visible:ring-2 focus-visible:ring-ring ${isActive ? "border-amber-400 bg-amber-50" : "hover:bg-muted/50"}`}
+                    onMouseEnter={() => setHoveredAnnotationId(annotation.id)}
+                    onMouseLeave={() => setHoveredAnnotationId(null)}
                   >
-                    <span className="min-w-0">
+                    <button
+                      type="button"
+                      className="min-w-0 flex-1 text-left outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                      onFocus={() => setHoveredAnnotationId(annotation.id)}
+                      onBlur={() => setHoveredAnnotationId(null)}
+                      onClick={() => selectAnnotation(annotation.id)}
+                    >
                       <span className="block truncate text-sm font-medium">
                         {displayCategory(annotation.category)} #{number}
                       </span>
                       <span className="mt-0.5 block text-xs text-muted-foreground">
                         {annotation.width.toFixed(2)} × {annotation.height.toFixed(2)} · area {formatArea(annotation.area)}
                       </span>
+                    </button>
+                    <span className="flex shrink-0 items-center gap-2">
+                      <span className={`text-xs font-semibold ${isExcluded ? "text-amber-700" : "text-emerald-700"}`}>
+                        {isExcluded ? "Excluded" : "Keep"}
+                      </span>
+                      <button
+                        type="button"
+                        tabIndex={0}
+                        aria-label={isExcluded ? `Restore ${displayCategory(annotation.category)} #${number}` : `Exclude ${displayCategory(annotation.category)} #${number} from export`}
+                        className={`grid size-7 place-items-center rounded-md border text-xs outline-none focus-visible:ring-2 focus-visible:ring-ring ${isExcluded ? "border-amber-300 bg-amber-100 text-amber-800" : "border-emerald-300 bg-emerald-50 text-emerald-700"}`}
+                        onClick={(event) => {
+                          event.stopPropagation()
+                          onToggleAnnotation(annotation.id)
+                        }}
+                        onKeyDown={(event) => {
+                          if (event.key === "Enter" || event.key === " ") {
+                            event.preventDefault()
+                            event.stopPropagation()
+                            onToggleAnnotation(annotation.id)
+                          }
+                        }}
+                      >
+                        {isExcluded ? <Check aria-hidden="true" /> : <X aria-hidden="true" />}
+                      </button>
                     </span>
-                    <span className={`shrink-0 text-xs font-semibold ${isExcluded ? "text-amber-700" : "text-emerald-700"}`}>
-                      {isExcluded ? "Exclude from Export" : "Keep"}
-                    </span>
-                  </button>
+                  </div>
                 )
               })}
             </div>
