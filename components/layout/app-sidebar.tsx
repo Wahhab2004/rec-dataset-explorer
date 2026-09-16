@@ -48,7 +48,7 @@ export function AppSidebar({
       id="application-sidebar"
       aria-label="Application sidebar"
       className={cn(
-        "fixed inset-y-0 left-0 z-40 flex h-svh flex-col border-r border-sidebar-border bg-sidebar text-sidebar-foreground transition-[width] duration-200 ease-out motion-reduce:transition-none",
+        "fixed inset-y-0 left-0 z-20 flex h-svh flex-col border-r border-sidebar-border bg-sidebar text-sidebar-foreground transition-[width] duration-200 ease-out motion-reduce:transition-none",
         collapsed ? "w-16" : "w-60",
       )}
     >
