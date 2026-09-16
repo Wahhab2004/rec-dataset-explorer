@@ -75,7 +75,12 @@ function toBackendOperator(operator: NumericOperator) {
   return operators[operator];
 }
 
-export function toBackendSearchRequest(filters: DatasetFilters): SearchRequest {
+export function toBackendSearchRequest(
+  filters: DatasetFilters,
+  page = 1,
+  pageSize = 24,
+  direction: "asc" | "desc" = "asc",
+): SearchRequest {
   const bbox = Object.fromEntries(
     BOUNDING_BOX_FIELDS.map((field) => {
       const condition = filters.boundingBoxConditions[field];
@@ -115,9 +120,9 @@ export function toBackendSearchRequest(filters: DatasetFilters): SearchRequest {
         })),
       bbox,
     },
-    sort: { field: "fileName", direction: "asc" },
-    page: 1,
-    pageSize: 24,
+    sort: { field: "fileName", direction },
+    page,
+    pageSize,
   };
 }
 

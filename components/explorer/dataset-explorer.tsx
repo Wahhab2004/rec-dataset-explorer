@@ -1,8 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { useCallback, useEffect, useMemo, useState } from "react";
-import { Check, ChevronDown, Grid2X2, List, X } from "lucide-react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { ChevronDown, X } from "lucide-react";
 
 import { ExportDatasetModal } from "@/components/export/export-dataset-modal";
 import { ActiveFilterChips } from "@/components/explorer/active-filter-chips";
@@ -12,7 +12,6 @@ import {
   ImageGrid,
   type DatasetImageCardData,
 } from "@/components/explorer/image-grid";
-import { SelectionToolbar } from "@/components/explorer/selection-toolbar";
 import { Button } from "@/components/ui/button";
 import { ApiError } from "@/lib/api/client";
 import {
@@ -74,6 +73,9 @@ export function DatasetExplorer({ datasetId }: DatasetExplorerProps) {
   const [categorySearch, setCategorySearch] = useState("");
   const [images, setImages] = useState<DatasetImageCardData[]>([]);
   const [totalResults, setTotalResults] = useState(0);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [pageSize, setPageSize] = useState(24);
+  const [sortDirection, setSortDirection] = useState<"asc" | "desc">("asc");
   const [isDatasetLoading, setIsDatasetLoading] = useState(true);
   const [isSearchLoading, setIsSearchLoading] = useState(false);
   const [datasetError, setDatasetError] = useState<string | null>(null);
@@ -87,39 +89,44 @@ export function DatasetExplorer({ datasetId }: DatasetExplorerProps) {
   const [detailError, setDetailError] = useState<string | null>(null);
   const [isExportOpen, setIsExportOpen] = useState(false);
   const [exportAllFiltered, setExportAllFiltered] = useState(false);
+  const resultsScrollRef = useRef<HTMLDivElement>(null);
 
   const loadSearchResults = useCallback(
-    async (filters: DatasetFilters) => {
+    async (filters: DatasetFilters, page = currentPage, size = pageSize, direction = sortDirection) => {
       setIsSearchLoading(true);
       setSearchError(null);
 
       try {
         const response = await searchDataset(
           datasetId,
-          toBackendSearchRequest(filters),
+          toBackendSearchRequest(filters, page, size, direction),
         );
-        const nextImages = response.items.map(toCardImage);
-        setImages(nextImages);
-        setTotalResults(response.total);
-        setSelectedImageIds((currentSelection) => {
-          const visibleIds = new Set(nextImages.map((image) => image.id));
-          return new Set(
-            Array.from(currentSelection).filter((id) => visibleIds.has(id)),
+        let nextResponse = response;
+        const lastPage = Math.max(1, Math.ceil(response.total / response.pageSize));
+        if (response.total > 0 && response.items.length === 0 && page > lastPage) {
+          setCurrentPage(lastPage);
+          nextResponse = await searchDataset(
+            datasetId,
+            toBackendSearchRequest(filters, lastPage, size, direction),
           );
-        });
+        }
+
+        const nextImages = nextResponse.items.map(toCardImage);
+        setImages(nextImages);
+        setTotalResults(nextResponse.total);
       } catch (error) {
         setSearchError(getErrorMessage(error, "Unable to load search results."));
       } finally {
         setIsSearchLoading(false);
       }
     },
-    [datasetId],
+    [currentPage, datasetId, pageSize, sortDirection],
   );
 
   useEffect(() => {
     let active = true;
 
-    void Promise.all([getDataset(datasetId), searchDataset(datasetId, toBackendSearchRequest(createEmptyDatasetFilters()))])
+    void Promise.all([getDataset(datasetId), searchDataset(datasetId, toBackendSearchRequest(createEmptyDatasetFilters(), 1, 24))])
       .then(([datasetResponse, searchResponse]) => {
         if (!active) {
           return;
@@ -128,6 +135,8 @@ export function DatasetExplorer({ datasetId }: DatasetExplorerProps) {
         setDataset(datasetResponse);
         setImages(searchResponse.items.map(toCardImage));
         setTotalResults(searchResponse.total);
+        setCurrentPage(1);
+        setPageSize(searchResponse.pageSize);
       })
       .catch((error) => {
         if (active) {
@@ -144,6 +153,10 @@ export function DatasetExplorer({ datasetId }: DatasetExplorerProps) {
       active = false;
     };
   }, [datasetId]);
+
+  useEffect(() => {
+    resultsScrollRef.current?.scrollTo({ top: 0, behavior: "auto" });
+  }, [appliedFilters, currentPage, pageSize, sortDirection]);
 
   const activeFilters = useMemo(
     () => getActiveFilterChips(appliedFilters),
@@ -173,7 +186,8 @@ export function DatasetExplorer({ datasetId }: DatasetExplorerProps) {
 
     const normalizedFilters = normalizeDatasetFilters(draftFilters);
     setAppliedFilters(normalizedFilters);
-    void loadSearchResults(normalizedFilters);
+    setCurrentPage(1);
+    void loadSearchResults(normalizedFilters, 1, pageSize);
   }
 
   function handleResetFilters() {
@@ -182,14 +196,35 @@ export function DatasetExplorer({ datasetId }: DatasetExplorerProps) {
     setAppliedFilters(emptyFilters);
     setCategorySearch("");
     setSelectedImageIds(new Set());
-    void loadSearchResults(emptyFilters);
+    setCurrentPage(1);
+    void loadSearchResults(emptyFilters, 1, pageSize);
   }
 
   function handleRemoveFilter(filterId: string) {
     const nextFilters = removeActiveFilter(appliedFilters, filterId);
     setAppliedFilters(nextFilters);
     setDraftFilters(removeActiveFilter(draftFilters, filterId));
-    void loadSearchResults(nextFilters);
+    setCurrentPage(1);
+    void loadSearchResults(nextFilters, 1, pageSize);
+  }
+
+  function handlePageChange(page: number) {
+    const totalPages = Math.max(1, Math.ceil(totalResults / pageSize));
+    const nextPage = Math.min(totalPages, Math.max(1, page));
+    setCurrentPage(nextPage);
+    void loadSearchResults(appliedFilters, nextPage, pageSize);
+  }
+
+  function handlePageSizeChange(nextPageSize: number) {
+    setPageSize(nextPageSize);
+    setCurrentPage(1);
+    void loadSearchResults(appliedFilters, 1, nextPageSize);
+  }
+
+  function handleSortChange(nextDirection: "asc" | "desc") {
+    setSortDirection(nextDirection);
+    setCurrentPage(1);
+    void loadSearchResults(appliedFilters, 1, pageSize, nextDirection);
   }
 
   function handleSelectionChange(imageId: string, selected: boolean) {
@@ -291,6 +326,12 @@ export function DatasetExplorer({ datasetId }: DatasetExplorerProps) {
   const allVisibleImagesSelected =
     images.length > 0 && images.every((image) => selectedImageIds.has(image.id));
   const imageLabel = totalResults === 1 ? "image" : "images";
+  const totalPages = Math.max(1, Math.ceil(totalResults / pageSize));
+  const rangeStart = totalResults === 0 ? 0 : (currentPage - 1) * pageSize + 1;
+  const rangeEnd = Math.min(currentPage * pageSize, totalResults);
+  const pageNumbers = Array.from({ length: totalPages }, (_, index) => index + 1).filter(
+    (page) => page === 1 || page === totalPages || Math.abs(page - currentPage) <= 1,
+  );
   const exportExcludedAnnotationIds = Array.from(
     new Set(
       Array.from(exportAllFiltered ? new Set(images.map((image) => image.id)) : selectedImageIds)
@@ -325,8 +366,8 @@ export function DatasetExplorer({ datasetId }: DatasetExplorerProps) {
         </p>
       </header>
 
-      <div className="grid min-h-[calc(100svh-7.25rem)] grid-cols-[17rem_minmax(0,1fr)] items-stretch xl:grid-cols-[18rem_minmax(0,1fr)]">
-        <div className="border-r bg-muted/20 p-3">
+      <div className="grid h-[calc(100svh-7.25rem)] min-h-0 grid-cols-[17rem_minmax(0,1fr)] items-stretch overflow-hidden xl:grid-cols-[18rem_minmax(0,1fr)]">
+        <div className="min-h-0 overflow-y-auto border-r bg-muted/20 p-3">
           <FilterPanel
             filters={draftFilters}
             categorySearch={categorySearch}
@@ -341,37 +382,45 @@ export function DatasetExplorer({ datasetId }: DatasetExplorerProps) {
           />
         </div>
 
-        <section aria-labelledby="results-heading" className="min-w-0 px-4 py-4 xl:px-5">
-          <div className="flex flex-wrap items-center justify-between gap-3">
-            <h2 id="results-heading" aria-live="polite" className="text-sm font-semibold">
+        <section aria-labelledby="results-heading" className="flex min-h-0 min-w-0 flex-col overflow-hidden px-4 py-4 xl:px-5">
+          <div className="shrink-0 flex flex-wrap items-center gap-2 border-b py-1.5 text-xs">
+            <h2 id="results-heading" aria-live="polite" className="font-semibold">
               {totalResults.toLocaleString()} {imageLabel} found
             </h2>
-            <div className="flex items-center gap-2">
-              <label htmlFor="image-sort" className="text-xs text-muted-foreground">Sort by</label>
+            <span className="text-muted-foreground" aria-live="polite">
+              · Showing {rangeStart.toLocaleString()}–{rangeEnd.toLocaleString()} of {totalResults.toLocaleString()}
+            </span>
+            <ActiveFilterChips filters={activeFilters} onRemove={handleRemoveFilter} />
+            <div className="ml-auto flex flex-wrap items-center gap-1.5">
+              <label htmlFor="image-sort" className="text-muted-foreground">Sort</label>
               <div className="relative">
-                <select id="image-sort" defaultValue="filename" className="h-8 appearance-none rounded-lg border border-input bg-card py-1 pr-8 pl-2.5 text-xs outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50">
-                  <option value="filename">File name</option>
+                <select id="image-sort" value={sortDirection} onChange={(event) => handleSortChange(event.target.value as "asc" | "desc")} className="h-7 appearance-none rounded-md border border-input bg-card py-1 pr-7 pl-2 text-xs outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50">
+                  <option value="asc">File name</option>
+                  <option value="desc">File name (Z-A)</option>
                 </select>
-                <ChevronDown aria-hidden="true" className="pointer-events-none absolute top-1/2 right-2 size-3.5 -translate-y-1/2 text-muted-foreground" />
+                <ChevronDown aria-hidden="true" className="pointer-events-none absolute top-1/2 right-1.5 size-3.5 -translate-y-1/2 text-muted-foreground" />
               </div>
-              <div role="group" aria-label="View options" className="flex items-center rounded-lg border bg-card p-0.5">
-                <button type="button" aria-label="Grid view" aria-pressed="true" className="grid size-7 place-items-center rounded-md bg-secondary text-foreground outline-none focus-visible:ring-2 focus-visible:ring-ring"><Grid2X2 aria-hidden="true" className="size-3.5" /></button>
-                <button type="button" aria-label="List view" aria-pressed="false" className="grid size-7 place-items-center rounded-md text-muted-foreground outline-none transition-colors hover:bg-muted hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring"><List aria-hidden="true" className="size-3.5" /></button>
+              <select id="images-per-page" aria-label="Images per page" value={pageSize} onChange={(event) => handlePageSizeChange(Number(event.target.value))} className="h-7 w-18 rounded-md border border-input bg-card px-1.5 text-xs outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50">
+                {[24, 48, 96, 100].map((size) => <option key={size} value={size}>{size}/page</option>)}
+              </select>
+              <Button type="button" variant="outline" size="xs" onClick={() => handlePageChange(currentPage - 1)} disabled={currentPage === 1 || totalResults === 0}>‹</Button>
+              <div className="flex items-center gap-0.5" aria-label="Pagination">
+                {pageNumbers.map((page, index) => (
+                  <span key={page} className="flex items-center gap-0.5">
+                    {index > 0 && page - pageNumbers[index - 1] > 1 ? <span className="px-0.5 text-xs text-muted-foreground">...</span> : null}
+                    <Button type="button" variant={page === currentPage ? "secondary" : "ghost"} size="icon-xs" aria-label={`Page ${page}`} aria-current={page === currentPage ? "page" : undefined} onClick={() => handlePageChange(page)}>{page}</Button>
+                  </span>
+                ))}
               </div>
+              <Button type="button" variant="outline" size="xs" onClick={() => handlePageChange(currentPage + 1)} disabled={currentPage >= totalPages || totalResults === 0}>›</Button>
+              <span className="text-muted-foreground">{selectedImageIds.size.toLocaleString()} selected</span>
+              {selectedImageIds.size > 0 ? <Button type="button" variant="ghost" size="xs" onClick={() => setSelectedImageIds(new Set())}><X data-icon="inline-start" />Clear Selection</Button> : null}
+              <Button type="button" variant="outline" size="xs" onClick={handleSelectAllVisible} disabled={allVisibleImagesSelected || images.length === 0}>Select All</Button>
+              <Button type="button" variant="outline" size="xs" onClick={handleExportAllFiltered} disabled={totalResults === 0}>Export</Button>
             </div>
           </div>
 
-          <div className="mt-3"><ActiveFilterChips filters={activeFilters} onRemove={handleRemoveFilter} /></div>
-
-          <div className="mt-4">
-            {selectedImageIds.size > 0 ? <SelectionToolbar count={selectedImageIds.size} onClear={() => setSelectedImageIds(new Set())} onExport={() => { setExportAllFiltered(false); setIsExportOpen(true); }} /> : null}
-            <div className="mb-3 flex items-center justify-between gap-3">
-              <p className="text-xs text-muted-foreground">{selectedImageIds.size > 0 ? `${selectedImageIds.size.toLocaleString()} selected across visible results` : "Select images to prepare a dataset"}</p>
-              <div className="flex flex-wrap justify-end gap-2">
-                <Button type="button" variant="outline" size="sm" onClick={handleSelectAllVisible} disabled={allVisibleImagesSelected || images.length === 0}><Check data-icon="inline-start" />Select All Visible</Button>
-                <Button type="button" variant="outline" size="sm" onClick={handleExportAllFiltered} disabled={totalResults === 0}>Export All Filtered</Button>
-              </div>
-            </div>
+          <div className="mt-2 flex min-h-0 flex-1 flex-col">
             {searchError ? (
               <div role="alert" className="mb-3 flex flex-wrap items-center justify-between gap-3 rounded-lg border border-destructive/30 bg-destructive/5 px-3 py-2.5 text-sm text-destructive">
                 <span>{searchError}</span>
@@ -379,7 +428,9 @@ export function DatasetExplorer({ datasetId }: DatasetExplorerProps) {
               </div>
             ) : null}
             {isSearchLoading ? <div className="mb-3 rounded-lg border bg-card px-3 py-2 text-xs text-muted-foreground">Loading search results...</div> : null}
-            <ImageGrid images={images} selectedImageIds={selectedImageIds} onSelectionChange={handleSelectionChange} onOpenImage={(image) => handleOpenImage(image.id)} />
+            <div ref={resultsScrollRef} className="min-h-0 flex-1 overflow-y-auto pr-1">
+              <ImageGrid images={images} selectedImageIds={selectedImageIds} onSelectionChange={handleSelectionChange} onOpenImage={(image) => handleOpenImage(image.id)} />
+            </div>
           </div>
         </section>
       </div>
