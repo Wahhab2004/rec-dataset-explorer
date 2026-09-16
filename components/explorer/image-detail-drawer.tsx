@@ -1,6 +1,6 @@
 "use client"
 
-import { useCallback, useEffect, useRef, useState } from "react"
+import { useCallback, useEffect, useRef, useState, type PointerEvent } from "react"
 import { createPortal } from "react-dom"
 import { Check, Eye, EyeOff, Maximize2, Minus, Plus, X } from "lucide-react"
 
@@ -39,6 +39,10 @@ export function ImageDetailDrawer({
   const [zoom, setZoom] = useState(100)
   const [translation, setTranslation] = useState({ x: 0, y: 0 })
   const [fitSize, setFitSize] = useState<{ width: number; height: number } | null>(null)
+  const [isSpacePressed, setIsSpacePressed] = useState(false)
+  const [isPanning, setIsPanning] = useState(false)
+  const spacePressedRef = useRef(false)
+  const panRef = useRef({ pointerId: -1, startX: 0, startY: 0, originX: 0, originY: 0, moved: false })
   const imageStageRef = useRef<HTMLDivElement>(null)
   const imageCanvasRef = useRef<HTMLDivElement>(null)
   const dialogRef = useRef<HTMLElement>(null)
@@ -79,6 +83,15 @@ export function ImageDetailDrawer({
         return
       }
 
+      if (event.code === "Space") {
+        event.preventDefault()
+        if (!spacePressedRef.current) {
+          spacePressedRef.current = true
+          setIsSpacePressed(true)
+        }
+        return
+      }
+
       if (event.key !== "Tab" || !dialogRef.current) return
 
       const focusableElements = Array.from(
@@ -103,9 +116,21 @@ export function ImageDetailDrawer({
       }
     }
 
+    function handleKeyUp(event: KeyboardEvent) {
+      if (event.code === "Space") {
+        spacePressedRef.current = false
+        setIsSpacePressed(false)
+      }
+    }
+
     document.addEventListener("keydown", handleKeyDown)
+    document.addEventListener("keyup", handleKeyUp)
     return () => {
       document.removeEventListener("keydown", handleKeyDown)
+      document.removeEventListener("keyup", handleKeyUp)
+      spacePressedRef.current = false
+      setIsSpacePressed(false)
+      setIsPanning(false)
       if (appShell) {
         appShell.inert = false
       }
@@ -130,7 +155,17 @@ export function ImageDetailDrawer({
     })
 
     resizeObserver.observe(stage)
-    return () => resizeObserver.disconnect()
+    function handleWindowResize() {
+      if (imageElement?.naturalWidth && imageElement.naturalHeight) {
+        fitImageToStage(imageElement.naturalWidth, imageElement.naturalHeight)
+      }
+    }
+
+    window.addEventListener("resize", handleWindowResize)
+    return () => {
+      resizeObserver.disconnect()
+      window.removeEventListener("resize", handleWindowResize)
+    }
   }, [fitImageToStage, image])
 
   if (!image) return null
@@ -155,7 +190,11 @@ export function ImageDetailDrawer({
   }
 
   function zoomBy(delta: number) {
-    setZoom((current) => Math.min(300, Math.max(50, current + delta)))
+    setZoom((current) => {
+      const nextZoom = Math.min(300, Math.max(50, current + delta))
+      setTranslation((currentTranslation) => clampTranslation(currentTranslation, nextZoom))
+      return nextZoom
+    })
   }
 
   function resetView() {
@@ -182,10 +221,66 @@ export function ImageDetailDrawer({
 
     setShowAnnotations(true)
     setZoom(targetScale * 100)
-    setTranslation({
+    setTranslation(clampTranslation({
       x: (0.5 - annotation.xCenter) * canvasWidth * targetScale,
       y: (0.5 - annotation.yCenter) * canvasHeight * targetScale,
-    })
+    }, targetScale * 100))
+  }
+
+  function clampTranslation(nextTranslation: { x: number; y: number }, nextZoom = zoom) {
+    const stage = imageStageRef.current
+    if (!stage || !fitSize) return nextTranslation
+
+    const viewportWidth = Math.max(0, stage.clientWidth - 32)
+    const viewportHeight = Math.max(0, stage.clientHeight - 32)
+    const scale = nextZoom / 100
+    const maxX = Math.max(0, (fitSize.width * scale - viewportWidth) / 2)
+    const maxY = Math.max(0, (fitSize.height * scale - viewportHeight) / 2)
+
+    return {
+      x: Math.min(maxX, Math.max(-maxX, nextTranslation.x)),
+      y: Math.min(maxY, Math.max(-maxY, nextTranslation.y)),
+    }
+  }
+
+  function handlePanStart(event: PointerEvent<HTMLDivElement>) {
+    const startedOnAnnotation = (event.target as HTMLElement).closest("button")
+    if (event.button !== 0 || (!spacePressedRef.current && startedOnAnnotation)) {
+      panRef.current.moved = false
+      return
+    }
+
+    event.currentTarget.setPointerCapture(event.pointerId)
+    panRef.current = {
+      pointerId: event.pointerId,
+      startX: event.clientX,
+      startY: event.clientY,
+      originX: translation.x,
+      originY: translation.y,
+      moved: false,
+    }
+    setIsPanning(true)
+  }
+
+  function handlePanMove(event: PointerEvent<HTMLDivElement>) {
+    if (panRef.current.pointerId !== event.pointerId) return
+
+    const deltaX = event.clientX - panRef.current.startX
+    const deltaY = event.clientY - panRef.current.startY
+    if (Math.abs(deltaX) > 3 || Math.abs(deltaY) > 3) panRef.current.moved = true
+    setTranslation(clampTranslation({
+      x: panRef.current.originX + deltaX,
+      y: panRef.current.originY + deltaY,
+    }))
+  }
+
+  function handlePanEnd(event: PointerEvent<HTMLDivElement>) {
+    if (panRef.current.pointerId !== event.pointerId) return
+    if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+      event.currentTarget.releasePointerCapture(event.pointerId)
+    }
+    panRef.current.pointerId = -1
+    setIsPanning(false)
   }
 
   return createPortal((
@@ -209,12 +304,22 @@ export function ImageDetailDrawer({
 
         <div className="grid min-h-0 flex-1 grid-cols-1 md:grid-cols-[minmax(0,13fr)_minmax(18rem,7fr)]">
           <main className="flex min-h-0 min-w-0 flex-col border-r bg-muted/20">
-            <div ref={imageStageRef} className="flex min-h-0 flex-1 items-center justify-center overflow-hidden bg-neutral-950/5 p-4">
+            <div
+              ref={imageStageRef}
+              className={`flex min-h-0 flex-1 items-center justify-center overflow-hidden bg-neutral-950/5 p-4 select-none ${isPanning ? "cursor-grabbing" : isSpacePressed ? "cursor-grab" : "cursor-default"}`}
+              onPointerDown={handlePanStart}
+              onPointerMove={handlePanMove}
+              onPointerUp={handlePanEnd}
+              onPointerCancel={handlePanEnd}
+              onPointerLeave={(event) => {
+                if (panRef.current.pointerId !== -1) handlePanEnd(event)
+              }}
+            >
               {imageUrl ? (
                 <div className="flex size-full min-h-0 min-w-0 items-center justify-center overflow-auto">
                   <div ref={imageCanvasRef} className="relative inline-block max-h-full max-w-full origin-center leading-none transition-transform duration-150" style={{ width: fitSize?.width, height: fitSize?.height, transform: `translate3d(${translation.x}px, ${translation.y}px, 0) scale(${zoom / 100})` }}>
                     {/* eslint-disable-next-line @next/next/no-img-element */}
-                    <img src={imageUrl} alt={image.fileName} className="block size-full object-contain" onLoad={(event) => fitImageToStage(event.currentTarget.naturalWidth, event.currentTarget.naturalHeight)} />
+                    <img src={imageUrl} alt={image.fileName} draggable={false} className="block size-full pointer-events-none object-contain" onLoad={(event) => fitImageToStage(event.currentTarget.naturalWidth, event.currentTarget.naturalHeight)} />
                     {showAnnotations ? image.annotations.map((annotation) => {
                       const isExcluded = excludedAnnotationIds.has(annotation.id)
                       const isSelected = activeAnnotationId === annotation.id
@@ -232,8 +337,19 @@ export function ImageDetailDrawer({
                           onBlur={() => setHoveredAnnotationId(null)}
                           onClick={() => selectAnnotation(annotation.id)}
                           onDoubleClick={() => {
+                            if (spacePressedRef.current || panRef.current.moved) return
                             selectAnnotation(annotation.id)
                             focusOnObject(annotation.id)
+                          }}
+                          onPointerDown={(event) => {
+                            if (spacePressedRef.current) event.preventDefault()
+                          }}
+                          onClickCapture={(event) => {
+                            if (spacePressedRef.current || panRef.current.moved) {
+                              event.preventDefault()
+                              event.stopPropagation()
+                              panRef.current.moved = false
+                            }
                           }}
                         >
                           {isSelected || isHovered ? <span className={`absolute left-0 top-0 -translate-y-full whitespace-nowrap rounded px-1 py-0.5 text-[10px] font-semibold leading-none ${isExcluded ? "bg-amber-100 text-amber-900" : "bg-emerald-100 text-emerald-900"}`}>{displayCategory(annotation.category)}{isExcluded ? " · Excluded" : ""}</span> : null}
