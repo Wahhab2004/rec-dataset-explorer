@@ -8,9 +8,9 @@ from dataclasses import dataclass
 from pathlib import PurePosixPath
 from typing import Any
 
+from app.core.config import get_settings
+
 SUPPORTED_IMAGE_EXTENSIONS = {".jpg", ".jpeg", ".png"}
-MAX_ARCHIVE_ENTRIES = 10_000
-MAX_EXTRACTED_BYTES = 1_000_000_000
 
 
 @dataclass(frozen=True)
@@ -33,15 +33,31 @@ class ValidationResult:
     annotation_file_count: int
 
 
-def validate_dataset_zip(archive_path: str) -> ValidationResult:
+def validate_dataset_zip(
+    archive_path: str,
+    *,
+    max_extracted_size_bytes: int | None = None,
+    max_archive_entries: int | None = None,
+) -> ValidationResult:
     errors: list[ValidationError] = []
+    settings = get_settings()
+    extracted_size_limit = (
+        settings.max_extracted_size_bytes
+        if max_extracted_size_bytes is None
+        else max_extracted_size_bytes
+    )
+    archive_entry_limit = (
+        settings.max_archive_entries
+        if max_archive_entries is None
+        else max_archive_entries
+    )
 
     try:
         with zipfile.ZipFile(archive_path) as archive:
             infos = archive.infolist()
-            if len(infos) > MAX_ARCHIVE_ENTRIES:
+            if len(infos) > archive_entry_limit:
                 return ValidationResult(
-                    errors=[ValidationError("ARCHIVE_TOO_LARGE", f"Archive contains more than {MAX_ARCHIVE_ENTRIES} entries").as_dict()],
+                    errors=[ValidationError("ARCHIVE_TOO_LARGE", f"Archive contains {len(infos):,} entries, exceeding the configured maximum of {archive_entry_limit:,}").as_dict()],
                     image_count=0,
                     annotation_file_count=0,
                 )
@@ -55,11 +71,11 @@ def validate_dataset_zip(archive_path: str) -> ValidationResult:
                     safe_infos.append(info)
 
             extracted_size = sum(info.file_size for info in safe_infos)
-            if extracted_size > MAX_EXTRACTED_BYTES:
+            if extracted_size > extracted_size_limit:
                 errors.append(
                     ValidationError(
                         "ARCHIVE_TOO_LARGE",
-                        f"Archive expands beyond {MAX_EXTRACTED_BYTES} bytes",
+                        f"Archive expands beyond the configured maximum extracted size of {_format_size(extracted_size_limit)}",
                     )
                 )
 
@@ -166,6 +182,14 @@ def validate_dataset_zip(archive_path: str) -> ValidationResult:
         image_count=len(images) if "images" in locals() else 0,
         annotation_file_count=len(labels) if "labels" in locals() else 0,
     )
+
+
+def _format_size(size_bytes: int) -> str:
+    for unit, divisor in (("GB", 1024**3), ("MB", 1024**2), ("KB", 1024)):
+        if size_bytes >= divisor:
+            value = size_bytes / divisor
+            return f"{value:g} {unit}"
+    return f"{size_bytes} bytes"
 
 
 def _validate_archive_name(name: str) -> ValidationError | None:

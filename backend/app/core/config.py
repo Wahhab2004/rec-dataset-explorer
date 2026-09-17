@@ -14,6 +14,9 @@ class Settings(BaseSettings):
     api_v1_prefix: str = "/api/v1"
     database_url: str
     storage_root: str = "storage"
+    max_upload_size_bytes: int = 2_147_483_648
+    max_extracted_size_bytes: int = 5_368_709_120
+    max_archive_entries: int = 50_000
 
     model_config = SettingsConfigDict(
         env_file=ENV_FILE,

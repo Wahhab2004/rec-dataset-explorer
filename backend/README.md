@@ -48,6 +48,24 @@ No real credentials should be committed to the repository.
 postgresql+psycopg://postgres:postgres@localhost:5432/rec_dataset_explorer
 ```
 
+### Import Capacity Limits
+
+The importer streams uploads to disk and retains archive safety protections.
+These environment variables set development defaults suitable for current REC
+archives:
+
+```text
+MAX_UPLOAD_SIZE_BYTES=2147483648
+MAX_EXTRACTED_SIZE_BYTES=5368709120
+MAX_ARCHIVE_ENTRIES=50000
+```
+
+`MAX_UPLOAD_SIZE_BYTES` limits the ZIP file written to disk.
+`MAX_EXTRACTED_SIZE_BYTES` limits the archive's declared uncompressed total
+before ingestion. `MAX_ARCHIVE_ENTRIES` limits the number of ZIP entries.
+Select production values based on available disk and storage capacity; do not
+remove these limits.
+
 ## Database and Migrations
 
 Start PostgreSQL, create the configured database if it does not already exist, and apply the available Alembic revisions from the `backend/` directory:

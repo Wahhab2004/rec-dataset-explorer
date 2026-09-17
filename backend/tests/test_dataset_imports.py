@@ -4,6 +4,7 @@ import io
 import json
 import zipfile
 from collections.abc import Generator
+from types import SimpleNamespace
 from uuid import uuid4
 
 import psycopg
@@ -21,6 +22,7 @@ from app.models.dataset import Dataset
 from app.models.import_job import ImportJob
 from app.services.storage_service import StorageService, get_storage_service
 from app.services.dataset_ingestion_service import ingest_import_job
+from app.services.dataset_validation_service import validate_dataset_zip
 
 
 @pytest.fixture(scope="module")
@@ -177,6 +179,48 @@ def test_zip_slip_is_rejected(client: TestClient) -> None:
     response = upload(client, {"../escape.txt": "nope"})
     status = get_status(client, response)
     assert any(error["code"] == "UNSAFE_ARCHIVE_PATH" for error in status.json()["errors"])
+
+
+def test_upload_size_limit_is_configurable(
+    client: TestClient,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    archive = make_zip(valid_files()).getvalue()
+    settings = SimpleNamespace(
+        max_upload_size_bytes=len(archive),
+        max_extracted_size_bytes=10_000,
+        max_archive_entries=100,
+    )
+    monkeypatch.setattr("app.services.dataset_import_service.get_settings", lambda: settings)
+
+    assert get_status(client, upload(client, valid_files())).json()["status"] == "completed"
+
+    settings.max_upload_size_bytes = len(archive) - 1
+    status = get_status(client, upload(client, valid_files())).json()
+    assert status["status"] == "failed"
+    assert status["errors"][0]["code"] == "ARCHIVE_TOO_LARGE"
+    assert "configured maximum size" in status["errors"][0]["message"]
+
+
+def test_configured_extracted_size_and_entry_limits(tmp_path) -> None:
+    archive_path = tmp_path / "dataset.zip"
+    archive_path.write_bytes(make_zip({**valid_files(), "notes.txt": "x" * 200}).getvalue())
+
+    extracted_too_large = validate_dataset_zip(
+        str(archive_path),
+        max_extracted_size_bytes=100,
+        max_archive_entries=100,
+    )
+    assert extracted_too_large.errors[0]["code"] == "ARCHIVE_TOO_LARGE"
+    assert "configured maximum extracted size" in extracted_too_large.errors[0]["message"]
+
+    too_many_entries = validate_dataset_zip(
+        str(archive_path),
+        max_extracted_size_bytes=10_000,
+        max_archive_entries=3,
+    )
+    assert too_many_entries.errors[0]["code"] == "ARCHIVE_TOO_LARGE"
+    assert "configured maximum" in too_many_entries.errors[0]["message"]
 
 
 def test_nonexistent_import_returns_404(client: TestClient) -> None:
