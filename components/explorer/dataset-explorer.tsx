@@ -247,6 +247,11 @@ export function DatasetExplorer({ datasetId }: DatasetExplorerProps) {
     });
   }
 
+  function handleExportSelected() {
+    setExportAllFiltered(false);
+    setIsExportOpen(true);
+  }
+
   function handleExportAllFiltered() {
     setExportAllFiltered(true);
     setIsExportOpen(true);
@@ -413,10 +418,11 @@ export function DatasetExplorer({ datasetId }: DatasetExplorerProps) {
                 ))}
               </div>
               <Button type="button" variant="outline" size="xs" onClick={() => handlePageChange(currentPage + 1)} disabled={currentPage >= totalPages || totalResults === 0}>›</Button>
-              <span className="text-muted-foreground">{selectedImageIds.size.toLocaleString()} selected</span>
+              {selectedImageIds.size > 0 ? <span className="text-muted-foreground">{selectedImageIds.size.toLocaleString()} selected</span> : null}
               {selectedImageIds.size > 0 ? <Button type="button" variant="ghost" size="xs" onClick={() => setSelectedImageIds(new Set())}><X data-icon="inline-start" />Clear Selection</Button> : null}
               <Button type="button" variant="outline" size="xs" onClick={handleSelectAllVisible} disabled={allVisibleImagesSelected || images.length === 0}>Select All</Button>
-              <Button type="button" variant="outline" size="xs" onClick={handleExportAllFiltered} disabled={totalResults === 0}>Export</Button>
+              {selectedImageIds.size > 0 ? <Button type="button" variant="outline" size="xs" onClick={handleExportSelected}>Export Selected</Button> : null}
+              <Button type="button" variant="outline" size="xs" onClick={handleExportAllFiltered} disabled={totalResults === 0}>Export All Filtered</Button>
             </div>
           </div>
 

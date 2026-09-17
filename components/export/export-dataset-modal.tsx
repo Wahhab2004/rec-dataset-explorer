@@ -162,6 +162,9 @@ export function ExportDatasetModal({
   const [exportStatus, setExportStatus] = useState<ExportStatusResponse | null>(null);
   const [exportError, setExportError] = useState<string | null>(null);
   const generatedFilename = getFilename(datasetName);
+  const selectionLabel = selectionMode === "all_filtered"
+    ? `All ${selectedCount.toLocaleString()} filtered ${selectedCount === 1 ? "image" : "images"}`
+    : `${selectedCount.toLocaleString()} ${selectedCount === 1 ? "image" : "images"} selected`;
 
   useEffect(() => {
     function handleKeyDown(event: KeyboardEvent) {
@@ -269,7 +272,7 @@ export function ExportDatasetModal({
             </h2>
             {stage !== "progress" ? (
               <p className="mt-1 text-sm text-muted-foreground">
-                {selectedCount.toLocaleString()} {selectedCount === 1 ? "image" : "images"} selected
+                {selectionLabel}
               </p>
             ) : null}
           </div>

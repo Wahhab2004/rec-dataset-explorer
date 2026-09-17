@@ -98,12 +98,6 @@ def _build_matched_image_query(
     for tag in image_filters.tags:
         statement = statement.where(Image.tags.contains([tag]))
 
-    categories = annotation_filters.categories
-    if categories:
-        statement = statement.where(
-            _annotation_exists(categories=categories),
-        )
-
     for object_count in annotation_filters.object_counts:
         count_statement = (
             select(func.count(Annotation.id))
@@ -118,15 +112,11 @@ def _build_matched_image_query(
             _compare(count_statement, object_count.operator, object_count.value),
         )
 
-    bbox_conditions = annotation_filters.bbox.model_dump(
-        by_alias=False,
-        exclude_none=True,
-    )
-    if bbox_conditions:
+    if _has_annotation_predicate(annotation_filters.categories, annotation_filters.bbox):
         statement = statement.where(
             _annotation_exists(
-                categories=categories,
-                bbox_conditions=bbox_conditions,
+                categories=annotation_filters.categories,
+                bbox_conditions=_bbox_conditions(annotation_filters.bbox),
             ),
         )
 
@@ -154,6 +144,30 @@ def _annotation_exists(
         )
 
     return annotation_statement.exists()
+
+
+def annotation_matches(
+    annotation: Annotation,
+    dataset_class: DatasetClass,
+    *,
+    categories: list[str],
+    bbox_conditions: dict[str, object],
+) -> bool:
+    if categories and dataset_class.class_name not in categories:
+        return False
+
+    return all(
+        _compare(getattr(annotation, field_name), condition["operator"], condition["value"])
+        for field_name, condition in bbox_conditions.items()
+    )
+
+
+def _bbox_conditions(bbox: object) -> dict[str, object]:
+    return bbox.model_dump(by_alias=False, exclude_none=True)
+
+
+def _has_annotation_predicate(categories: list[str], bbox: object) -> bool:
+    return bool(categories or _bbox_conditions(bbox))
 
 
 def _compare(column: object, operator: str, value: object):

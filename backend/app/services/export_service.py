@@ -16,7 +16,7 @@ from app.models.export_job import ExportJob
 from app.models.image import Image
 from app.schemas.export import ExportRequest
 from app.services.dataset_service import DatasetNotFoundError
-from app.services.search_service import _build_matched_image_query
+from app.services.search_service import _bbox_conditions, _build_matched_image_query, annotation_matches
 from app.services.storage_service import StorageService
 
 
@@ -203,34 +203,17 @@ def _matching_annotations(
     request: ExportRequest,
 ) -> list[Annotation]:
     filters = request.filters.annotation_filters
-    categories = set(filters.categories)
-    result = []
-    for annotation in annotations:
-        dataset_class = class_by_id[annotation.class_id]
-        if categories and dataset_class.class_name not in categories:
-            continue
-        if not _matches_bbox(annotation, filters.bbox.model_dump(by_alias=False, exclude_none=True)):
-            continue
-        result.append(annotation)
-    return result
-
-
-def _matches_bbox(annotation: Annotation, conditions: dict[str, object]) -> bool:
-    for field, condition in conditions.items():
-        value = getattr(annotation, field)
-        expected = condition["value"]
-        operator = condition["operator"]
-        if operator == "eq" and value != expected:
-            return False
-        if operator == "lt" and value >= expected:
-            return False
-        if operator == "lte" and value > expected:
-            return False
-        if operator == "gt" and value <= expected:
-            return False
-        if operator == "gte" and value < expected:
-            return False
-    return True
+    bbox_conditions = _bbox_conditions(filters.bbox)
+    return [
+        annotation
+        for annotation in annotations
+        if annotation_matches(
+            annotation,
+            class_by_id[annotation.class_id],
+            categories=filters.categories,
+            bbox_conditions=bbox_conditions,
+        )
+    ]
 
 
 def _yolo_content(annotations: list[Annotation], class_by_id: dict[UUID, DatasetClass]) -> str:

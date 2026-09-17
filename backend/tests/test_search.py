@@ -238,6 +238,26 @@ def test_combined_filters(client: TestClient, search_context: UUID) -> None:
     assert body["items"][0]["fileName"] == "a-night-rain-front.jpg"
 
 
+def test_category_and_area_must_match_the_same_annotation(
+    client: TestClient,
+    search_context: UUID,
+) -> None:
+    body = search(
+        client,
+        search_context,
+        {
+            "annotationFilters": {
+                "categories": ["person"],
+                "bbox": {"area": {"operator": "gt", "value": 0.10}},
+            },
+        },
+    )
+
+    assert [item["fileName"] for item in body["items"]] == [
+        "a-night-rain-front.jpg",
+    ]
+
+
 def test_pagination_and_descending_sort(client: TestClient, search_context: UUID) -> None:
     body = search(
         client,
