@@ -37,7 +37,10 @@ type DatasetExplorerProps = {
   datasetId: string;
 };
 
-type AnnotationExclusions = Record<string, Set<string>>;
+type AnnotationOverrides = {
+  included: Record<string, Set<string>>;
+  excluded: Record<string, Set<string>>;
+};
 
 function displayOption(value: string) {
   return value
@@ -84,7 +87,7 @@ export function DatasetExplorer({ datasetId }: DatasetExplorerProps) {
     () => new Set(),
   );
   const [imageDetail, setImageDetail] = useState<ImageDetail | null>(null);
-  const [annotationExclusions, setAnnotationExclusions] = useState<AnnotationExclusions>({});
+  const [annotationOverrides, setAnnotationOverrides] = useState<AnnotationOverrides>({ included: {}, excluded: {} });
   const [isDetailLoading, setIsDetailLoading] = useState(false);
   const [detailError, setDetailError] = useState<string | null>(null);
   const [isExportOpen, setIsExportOpen] = useState(false);
@@ -268,36 +271,42 @@ export function DatasetExplorer({ datasetId }: DatasetExplorerProps) {
       .finally(() => setIsDetailLoading(false));
   }
 
-  function handleToggleAnnotation(imageId: string, annotationId: string) {
-    setAnnotationExclusions((currentExclusions) => {
-      const nextExclusions = { ...currentExclusions };
-      const imageExclusions = new Set(nextExclusions[imageId] ?? []);
+  function handleToggleAnnotationOverride(imageId: string, annotationId: string, override: "included" | "excluded") {
+    setAnnotationOverrides((currentOverrides) => {
+      const nextOverrides = { included: { ...currentOverrides.included }, excluded: { ...currentOverrides.excluded } };
+      const imageOverrides = new Set(nextOverrides[override][imageId] ?? []);
 
-      if (imageExclusions.has(annotationId)) {
-        imageExclusions.delete(annotationId);
+      if (imageOverrides.has(annotationId)) {
+        imageOverrides.delete(annotationId);
       } else {
-        imageExclusions.add(annotationId);
+        imageOverrides.add(annotationId);
+        const oppositeOverride = override === "included" ? "excluded" : "included";
+        const oppositeIds = new Set(nextOverrides[oppositeOverride][imageId] ?? []);
+        oppositeIds.delete(annotationId);
+        if (oppositeIds.size === 0) delete nextOverrides[oppositeOverride][imageId];
+        else nextOverrides[oppositeOverride][imageId] = oppositeIds;
       }
 
-      if (imageExclusions.size === 0) {
-        delete nextExclusions[imageId];
+      if (imageOverrides.size === 0) {
+        delete nextOverrides[override][imageId];
       } else {
-        nextExclusions[imageId] = imageExclusions;
+        nextOverrides[override][imageId] = imageOverrides;
       }
 
-      return nextExclusions;
+      return nextOverrides;
     });
   }
 
-  function handleRestoreAnnotationExclusions(imageId: string) {
-    setAnnotationExclusions((currentExclusions) => {
-      if (!(imageId in currentExclusions)) {
-        return currentExclusions;
+  function handleRestoreAnnotationOverrides(imageId: string) {
+    setAnnotationOverrides((currentOverrides) => {
+      if (!(imageId in currentOverrides.included) && !(imageId in currentOverrides.excluded)) {
+        return currentOverrides;
       }
 
-      const nextExclusions = { ...currentExclusions };
-      delete nextExclusions[imageId];
-      return nextExclusions;
+      const nextOverrides = { included: { ...currentOverrides.included }, excluded: { ...currentOverrides.excluded } };
+      delete nextOverrides.included[imageId];
+      delete nextOverrides.excluded[imageId];
+      return nextOverrides;
     });
   }
 
@@ -340,7 +349,13 @@ export function DatasetExplorer({ datasetId }: DatasetExplorerProps) {
   const exportExcludedAnnotationIds = Array.from(
     new Set(
       Array.from(exportAllFiltered ? new Set(images.map((image) => image.id)) : selectedImageIds)
-        .flatMap((imageId) => Array.from(annotationExclusions[imageId] ?? [])),
+        .flatMap((imageId) => Array.from(annotationOverrides.excluded[imageId] ?? [])),
+    ),
+  );
+  const exportIncludedAnnotationIds = Array.from(
+    new Set(
+      Array.from(exportAllFiltered ? new Set(images.map((image) => image.id)) : selectedImageIds)
+        .flatMap((imageId) => Array.from(annotationOverrides.included[imageId] ?? [])),
     ),
   );
 
@@ -446,20 +461,22 @@ export function DatasetExplorer({ datasetId }: DatasetExplorerProps) {
       <ImageDetailDrawer
         key={imageDetail?.id ?? "closed"}
         image={imageDetail}
-        excludedAnnotationIds={imageDetail ? annotationExclusions[imageDetail.id] ?? new Set() : new Set()}
-        onToggleAnnotation={(annotationId) => {
+        appliedFilters={appliedFilters}
+        includedAnnotationIds={imageDetail ? annotationOverrides.included[imageDetail.id] ?? new Set() : new Set()}
+        excludedAnnotationIds={imageDetail ? annotationOverrides.excluded[imageDetail.id] ?? new Set() : new Set()}
+        onToggleAnnotationOverride={(annotationId, override) => {
           if (imageDetail) {
-            handleToggleAnnotation(imageDetail.id, annotationId);
+            handleToggleAnnotationOverride(imageDetail.id, annotationId, override);
           }
         }}
         onRestoreAll={() => {
           if (imageDetail) {
-            handleRestoreAnnotationExclusions(imageDetail.id);
+            handleRestoreAnnotationOverrides(imageDetail.id);
           }
         }}
         onClose={() => setImageDetail(null)}
       />
-      {isExportOpen ? <ExportDatasetModal datasetId={datasetId} selectedImageIds={Array.from(selectedImageIds)} selectedCount={exportAllFiltered ? totalResults : selectedImageIds.size} datasetName={dataset.name} appliedFilters={appliedFilters} selectionMode={exportAllFiltered ? "all_filtered" : "explicit"} excludedAnnotationIds={exportExcludedAnnotationIds} onClose={() => { setIsExportOpen(false); setExportAllFiltered(false); }} /> : null}
+      {isExportOpen ? <ExportDatasetModal datasetId={datasetId} selectedImageIds={Array.from(selectedImageIds)} selectedCount={exportAllFiltered ? totalResults : selectedImageIds.size} datasetName={dataset.name} appliedFilters={appliedFilters} selectionMode={exportAllFiltered ? "all_filtered" : "explicit"} includedAnnotationIds={exportIncludedAnnotationIds} excludedAnnotationIds={exportExcludedAnnotationIds} onClose={() => { setIsExportOpen(false); setExportAllFiltered(false); }} /> : null}
     </div>
   );
 }

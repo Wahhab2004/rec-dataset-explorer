@@ -335,6 +335,7 @@ Exactly three export types are supported:
     "mode": "explicit",
     "imageIds": ["uuid-1", "uuid-2"]
   },
+  "includedAnnotationIds": ["annotation-uuid-1"],
   "excludedAnnotationIds": ["annotation-uuid-2", "annotation-uuid-4"],
   "filters": {
     "imageFilters": {
@@ -355,14 +356,16 @@ Exactly three export types are supported:
 }
 ```
 
-`excludedAnnotationIds` is optional. When missing or empty, export behavior is
-unchanged. When supplied, every ID must exist, belong to the requested dataset,
-and belong to an image included in the resolved export selection. Invalid IDs,
-annotations from another dataset, and annotations from an image not included in
-the export are rejected. Duplicate IDs are harmless and are normalized.
+`includedAnnotationIds` and `excludedAnnotationIds` are optional. When missing
+or empty, export behavior is unchanged. Every supplied ID must exist, belong to
+the requested dataset, and belong to an image included in the resolved export
+selection. Invalid IDs, annotations from another dataset, and annotations from
+an image not included in the export are rejected. Duplicate IDs are harmless
+and normalized. An annotation ID cannot occur in both override arrays.
 
-Exclusions are applied after the existing image and annotation filters. The
-export contains regenerated YOLO TXT files with only the retained annotations.
+The export first selects annotations matching the active filters, unions the
+manual inclusions, then removes manual exclusions. The export contains
+regenerated YOLO TXT files with only the retained annotations.
 If all annotations for an explicitly selected image are excluded, the image is
 kept and its generated TXT file is empty. The source database annotations and
 original TXT files are never modified or deleted.

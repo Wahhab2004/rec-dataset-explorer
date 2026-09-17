@@ -218,6 +218,63 @@ def test_bbox_filter_writes_only_matching_annotation(
     assert get_zip(client, export_id).read("labels/one.txt").decode() == "0 0.500 0.500 0.200 0.300"
 
 
+def test_manual_include_unions_with_matching_annotations_without_mutating_source(
+    client: TestClient,
+    export_context: dict[str, object],
+) -> None:
+    source_before = export_context["source_label"].read_bytes()
+    export_id, status = create_export(client, export_context["dataset_id"], {
+        "exportType": "annotations_only",
+        "selection": {"mode": "explicit", "imageIds": [str(export_context["image_one_id"])]},
+        "filters": {"annotationFilters": {"bbox": {"area": {"operator": "gt", "value": .03}}}},
+        "includedAnnotationIds": [str(export_context["annotation_ids"]["car"])],
+    })
+
+    assert status["status"] == "completed"
+    assert get_zip(client, export_id).read("labels/one.txt").decode() == (
+        "0 0.500 0.500 0.200 0.300\n2 0.400 0.600 0.100 0.200"
+    )
+    assert export_context["source_label"].read_bytes() == source_before
+
+
+def test_manual_exclusion_applies_after_manual_inclusion(
+    client: TestClient,
+    export_context: dict[str, object],
+) -> None:
+    annotation_ids = export_context["annotation_ids"]
+    export_id, status = create_export(client, export_context["dataset_id"], {
+        "exportType": "annotations_only",
+        "selection": {"mode": "explicit", "imageIds": [str(export_context["image_one_id"])]},
+        "filters": {"annotationFilters": {"bbox": {"area": {"operator": "gt", "value": .03}}}},
+        "includedAnnotationIds": [str(annotation_ids["car"])],
+        "excludedAnnotationIds": [str(annotation_ids["person"])],
+    })
+
+    assert status["status"] == "completed"
+    assert get_zip(client, export_id).read("labels/one.txt").decode() == "2 0.400 0.600 0.100 0.200"
+
+
+def test_conflicting_or_invalid_included_annotation_ids_fail_export(
+    client: TestClient,
+    export_context: dict[str, object],
+) -> None:
+    annotation_ids = export_context["annotation_ids"]
+    for included_ids, excluded_ids, expected_code in (
+        ([annotation_ids["car"]], [annotation_ids["car"]], "CONFLICTING_ANNOTATION_OVERRIDES"),
+        ([uuid4()], [], "INVALID_ANNOTATION_ID"),
+        ([annotation_ids["other_image"]], [], "INVALID_ANNOTATION_ID"),
+    ):
+        export_id, status = create_export(client, export_context["dataset_id"], {
+            "exportType": "annotations_only",
+            "selection": {"mode": "explicit", "imageIds": [str(export_context["image_one_id"])]},
+            "includedAnnotationIds": [str(annotation_id) for annotation_id in included_ids],
+            "excludedAnnotationIds": [str(annotation_id) for annotation_id in excluded_ids],
+        })
+        assert export_id
+        assert status["status"] == "failed"
+        assert status["error"]["code"] == expected_code
+
+
 def test_excluded_annotation_is_removed_and_source_data_is_unchanged(
     client: TestClient,
     export_context: dict[str, object],

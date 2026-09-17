@@ -67,6 +67,18 @@ def create_export(
             image_ids,
             request.excluded_annotation_ids,
         )
+        included_annotation_ids = _validate_override_annotation_ids(
+            db,
+            dataset_id,
+            image_ids,
+            request.included_annotation_ids,
+            "included",
+        )
+        if excluded_annotation_ids & included_annotation_ids:
+            raise ExportInputError(
+                "CONFLICTING_ANNOTATION_OVERRIDES",
+                "An annotation cannot be both manually included and manually excluded",
+            )
         annotations = list(
             db.scalars(select(Annotation).where(Annotation.image_id.in_(image_ids))).all()
         )
@@ -84,13 +96,18 @@ def create_export(
                     class_by_id,
                     request,
                 )
-                matching_annotations = [
+                matching_annotation_ids = {annotation.id for annotation in matching_annotations}
+                final_annotations = [
                     annotation
-                    for annotation in matching_annotations
-                    if annotation.id not in excluded_annotation_ids
+                    for annotation in annotations_by_image[image.id]
+                    if (
+                        annotation.id in matching_annotation_ids
+                        or annotation.id in included_annotation_ids
+                    )
+                    and annotation.id not in excluded_annotation_ids
                 ]
                 label_name = f"{PurePosixPath(image.file_name).stem}.txt"
-                label_content = _yolo_content(matching_annotations, class_by_id)
+                label_content = _yolo_content(final_annotations, class_by_id)
                 if request.export_type in {"images_and_annotations", "complete_dataset"}:
                     source = storage.image_path(dataset_id, image.file_name)
                     if not source.is_file():
@@ -156,7 +173,23 @@ def _validate_excluded_annotation_ids(
     image_ids: list[UUID],
     excluded_annotation_ids: list[UUID],
 ) -> set[UUID]:
-    unique_ids = set(excluded_annotation_ids)
+    return _validate_override_annotation_ids(
+        db,
+        dataset_id,
+        image_ids,
+        excluded_annotation_ids,
+        "excluded",
+    )
+
+
+def _validate_override_annotation_ids(
+    db: Session,
+    dataset_id: UUID,
+    image_ids: list[UUID],
+    annotation_ids: list[UUID],
+    override_name: str,
+) -> set[UUID]:
+    unique_ids = set(annotation_ids)
     if not unique_ids:
         return set()
 
@@ -175,7 +208,7 @@ def _validate_excluded_annotation_ids(
     ):
         raise ExportInputError(
             "INVALID_ANNOTATION_ID",
-            "Every excluded annotation must belong to an image included in the export",
+            f"Every {override_name} annotation must belong to an image included in the export",
         )
     return unique_ids
 

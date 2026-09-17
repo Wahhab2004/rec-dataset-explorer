@@ -8,7 +8,6 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
   ANNOTATION_CATEGORIES,
-  BOUNDING_BOX_FIELDS,
   BOUNDING_BOX_FIELD_LABELS,
   formatCategoryLabel,
   isBoundingBoxValueValid,
@@ -31,6 +30,16 @@ type AnnotationLevelFiltersProps = {
 
 const selectClassName =
   "h-8 w-full min-w-0 rounded-lg border border-input bg-background px-2 text-sm text-foreground outline-none transition-colors focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50";
+
+const BBOX_QUALITY_FIELDS: readonly BoundingBoxField[] = [
+  "width",
+  "height",
+  "area",
+];
+const ADVANCED_POSITION_FIELDS: readonly BoundingBoxField[] = [
+  "xCenter",
+  "yCenter",
+];
 
 function OperatorOptions() {
   return NUMERIC_OPERATORS.map((operator) => (
@@ -145,8 +154,61 @@ export function AnnotationLevelFilters({
     });
   }
 
+  function renderBoundingBoxCondition(field: BoundingBoxField) {
+    const condition = filters.boundingBoxConditions[field];
+    const fieldId = field.replace(
+      /[A-Z]/g,
+      (character) => `-${character.toLowerCase()}`,
+    );
+    const fieldLabel = BOUNDING_BOX_FIELD_LABELS[field];
+    const operatorId = `bounding-box-${fieldId}-operator`;
+    const valueId = `bounding-box-${fieldId}-value`;
+
+    return (
+      <div
+        key={field}
+        className="grid grid-cols-[minmax(0,1fr)_4.25rem_4.75rem] items-center gap-2"
+      >
+        <label htmlFor={valueId} className="truncate text-xs">
+          {fieldLabel}
+        </label>
+        <label htmlFor={operatorId} className="sr-only">
+          {fieldLabel} operator
+        </label>
+        <select
+          id={operatorId}
+          value={condition.operator}
+          onChange={(event) =>
+            updateBoundingBoxCondition(field, {
+              operator: event.target.value as NumericOperator,
+            })
+          }
+          className={selectClassName}
+        >
+          <OperatorOptions />
+        </select>
+        <Input
+          id={valueId}
+          type="number"
+          min="0"
+          max="1"
+          step="any"
+          value={condition.value}
+          aria-invalid={!isBoundingBoxValueValid(condition.value)}
+          onChange={(event) =>
+            updateBoundingBoxCondition(field, {
+              value: event.target.value,
+            })
+          }
+          placeholder="Value"
+          className="px-2"
+        />
+      </div>
+    );
+  }
+
   return (
-    <div className="space-y-5">
+    <div className="space-y-4">
       <div className="space-y-1.5">
         <label htmlFor="filter-category-search" className="text-xs font-medium">
           Category
@@ -221,7 +283,33 @@ export function AnnotationLevelFilters({
         </p>
       </div>
 
-      <fieldset className="space-y-2.5">
+      <fieldset className="space-y-2" aria-describedby="bounding-box-quality-help">
+        <legend className="text-xs font-semibold">Bounding Box Quality</legend>
+        <p id="bounding-box-quality-help" className="text-[11px] text-muted-foreground">
+          YOLO bbox values are normalized between 0 and 1.
+        </p>
+        <div className="space-y-2">
+          {BBOX_QUALITY_FIELDS.map(renderBoundingBoxCondition)}
+        </div>
+        <p className="text-[11px] text-muted-foreground">Area = width × height</p>
+      </fieldset>
+
+      <div className="rounded-md border border-dashed px-2.5 py-2 text-[11px] leading-4 text-muted-foreground">
+        <p>All active annotation conditions must match the same object.</p>
+        <p>An image is included when at least one annotation matches.</p>
+        <p>Export includes only matching annotations.</p>
+      </div>
+
+      <details className="group rounded-md border border-dashed px-2.5 py-2">
+        <summary className="cursor-pointer text-xs font-semibold text-muted-foreground marker:text-muted-foreground">
+          Advanced Position Filters
+        </summary>
+        <div className="mt-2 space-y-2">
+          {ADVANCED_POSITION_FIELDS.map(renderBoundingBoxCondition)}
+        </div>
+      </details>
+
+      <fieldset className="space-y-2.5 border-t pt-4">
         <legend className="text-xs font-semibold">Object Count</legend>
         {filters.objectCountConditions.length > 0 ? (
           <div className="space-y-2">
@@ -322,69 +410,6 @@ export function AnnotationLevelFilters({
         >
           + Add Condition
         </Button>
-      </fieldset>
-
-      <fieldset className="space-y-2.5" aria-describedby="bounding-box-help">
-        <legend className="text-xs font-semibold">Bounding Box</legend>
-        <p id="bounding-box-help" className="text-[11px] text-muted-foreground">
-          Values use normalized YOLO coordinates.
-        </p>
-        <div className="space-y-2">
-          {BOUNDING_BOX_FIELDS.map((field) => {
-            const condition = filters.boundingBoxConditions[field];
-            const fieldId = field.replace(
-              /[A-Z]/g,
-              (character) => `-${character.toLowerCase()}`,
-            );
-            const fieldLabel = BOUNDING_BOX_FIELD_LABELS[field];
-            const operatorId = `bounding-box-${fieldId}-operator`;
-            const valueId = `bounding-box-${fieldId}-value`;
-
-            return (
-              <div
-                key={field}
-                className="grid grid-cols-[minmax(0,1fr)_4.25rem_4.75rem] items-center gap-2"
-              >
-                <label htmlFor={valueId} className="truncate text-xs">
-                  {fieldLabel}
-                </label>
-                <label htmlFor={operatorId} className="sr-only">
-                  {fieldLabel} operator
-                </label>
-                <select
-                  id={operatorId}
-                  value={condition.operator}
-                  onChange={(event) =>
-                    updateBoundingBoxCondition(field, {
-                      operator: event.target.value as NumericOperator,
-                    })
-                  }
-                  className={selectClassName}
-                >
-                  <OperatorOptions />
-                </select>
-                <Input
-                  id={valueId}
-                  type="number"
-                  min="0"
-                  max="1"
-                  step="any"
-                  value={condition.value}
-                  aria-invalid={
-                    !isBoundingBoxValueValid(condition.value)
-                  }
-                  onChange={(event) =>
-                    updateBoundingBoxCondition(field, {
-                      value: event.target.value,
-                    })
-                  }
-                  placeholder="Value"
-                  className="px-2"
-                />
-              </div>
-            );
-          })}
-        </div>
       </fieldset>
     </div>
   );

@@ -34,6 +34,10 @@ class ExportRequest(BaseModel):
         default_factory=list,
         alias="excludedAnnotationIds",
     )
+    included_annotation_ids: list[UUID] = Field(
+        default_factory=list,
+        alias="includedAnnotationIds",
+    )
 
 
 class ExportAcceptedResponse(BaseModel):

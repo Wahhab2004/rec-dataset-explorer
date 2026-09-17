@@ -142,6 +142,7 @@ export function ExportDatasetModal({
   datasetName,
   appliedFilters,
   selectionMode,
+  includedAnnotationIds,
   excludedAnnotationIds,
   onClose,
 }: {
@@ -151,6 +152,7 @@ export function ExportDatasetModal({
   datasetName: string;
   appliedFilters: DatasetFilters;
   selectionMode: "explicit" | "all_filtered";
+  includedAnnotationIds: string[];
   excludedAnnotationIds: string[];
   onClose: () => void;
 }) {
@@ -238,6 +240,7 @@ export function ExportDatasetModal({
             ? { mode: "all_filtered" as const }
             : { mode: "explicit" as const, imageIds: selectedImageIds },
         filters: toBackendExportFilters(appliedFilters),
+        ...(includedAnnotationIds.length > 0 ? { includedAnnotationIds } : {}),
         ...(excludedAnnotationIds.length > 0 ? { excludedAnnotationIds } : {}),
       };
       const response = await createExport(datasetId, {

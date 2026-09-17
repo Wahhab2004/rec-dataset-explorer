@@ -8,8 +8,11 @@ import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import type { ImageDetail } from "@/lib/api/datasets"
 import { resolveBackendFileUrl } from "@/lib/api/file-url"
+import { annotationMatchesFilters, type DatasetFilters } from "@/lib/dataset-filtering"
 
 type InspectorTab = "annotations" | "metadata" | "txt"
+type AnnotationReviewMode = "exported" | "all"
+type AnnotationReviewState = "included" | "filtered-out" | "manually-added" | "manually-excluded"
 
 function displayCategory(category: string) {
   return category.replace(/[-_]/g, " ").replace(/\b\w/g, (character) => character.toUpperCase())
@@ -21,19 +24,24 @@ function formatArea(area: number) {
 
 export function ImageDetailDrawer({
   image,
+  appliedFilters,
+  includedAnnotationIds,
   excludedAnnotationIds,
-  onToggleAnnotation,
+  onToggleAnnotationOverride,
   onRestoreAll,
   onClose,
 }: {
   image: ImageDetail | null
+  appliedFilters: DatasetFilters
+  includedAnnotationIds: Set<string>
   excludedAnnotationIds: Set<string>
-  onToggleAnnotation: (annotationId: string) => void
+  onToggleAnnotationOverride: (annotationId: string, override: "included" | "excluded") => void
   onRestoreAll: () => void
   onClose: () => void
 }) {
   const [activeTab, setActiveTab] = useState<InspectorTab>("annotations")
-  const [showAnnotations, setShowAnnotations] = useState(false)
+  const [annotationReviewMode, setAnnotationReviewMode] = useState<AnnotationReviewMode>("exported")
+  const [showAnnotations, setShowAnnotations] = useState(true)
   const [activeAnnotationId, setActiveAnnotationId] = useState<string | null>(null)
   const [hoveredAnnotationId, setHoveredAnnotationId] = useState<string | null>(null)
   const [zoom, setZoom] = useState(100)
@@ -171,15 +179,27 @@ export function ImageDetailDrawer({
   if (!image) return null
 
   const imageUrl = resolveBackendFileUrl(image.imageUrl)
-  const excludedCount = image.annotations.filter((annotation) => excludedAnnotationIds.has(annotation.id)).length
   const annotationsByCategory = (() => {
     const counts = new Map<string, number>()
     return image.annotations.map((annotation) => {
       const number = (counts.get(annotation.category) ?? 0) + 1
       counts.set(annotation.category, number)
-      return { annotation, number }
+      const matchesFilters = annotationMatchesFilters(annotation, appliedFilters)
+      const state: AnnotationReviewState = matchesFilters
+        ? excludedAnnotationIds.has(annotation.id) ? "manually-excluded" : "included"
+        : includedAnnotationIds.has(annotation.id) ? "manually-added" : "filtered-out"
+      return { annotation, number, state }
     })
   })()
+  const matchingCount = annotationsByCategory.filter(({ state }) => state === "included" || state === "manually-excluded").length
+  const manuallyAddedCount = annotationsByCategory.filter(({ state }) => state === "manually-added").length
+  const manuallyExcludedCount = annotationsByCategory.filter(({ state }) => state === "manually-excluded").length
+  const exportedCount = annotationsByCategory.filter(
+    ({ state }) => state === "included" || state === "manually-added",
+  ).length
+  const visibleAnnotations = annotationReviewMode === "exported"
+    ? annotationsByCategory.filter(({ state }) => state === "included" || state === "manually-added")
+    : annotationsByCategory
   const selectedAnnotation = activeAnnotationId
     ? annotationsByCategory.find(({ annotation }) => annotation.id === activeAnnotationId)
     : null
@@ -320,16 +340,18 @@ export function ImageDetailDrawer({
                   <div ref={imageCanvasRef} className="relative inline-block max-h-full max-w-full origin-center leading-none transition-transform duration-150" style={{ width: fitSize?.width, height: fitSize?.height, transform: `translate3d(${translation.x}px, ${translation.y}px, 0) scale(${zoom / 100})` }}>
                     {/* eslint-disable-next-line @next/next/no-img-element */}
                     <img src={imageUrl} alt={image.fileName} draggable={false} className="block size-full pointer-events-none object-contain" onLoad={(event) => fitImageToStage(event.currentTarget.naturalWidth, event.currentTarget.naturalHeight)} />
-                    {showAnnotations ? image.annotations.map((annotation) => {
-                      const isExcluded = excludedAnnotationIds.has(annotation.id)
+                    {showAnnotations ? visibleAnnotations.map(({ annotation, state }) => {
+                      const isExcluded = state === "manually-excluded"
+                      const isAdded = state === "manually-added"
+                      const isFilteredOut = state === "filtered-out"
                       const isSelected = activeAnnotationId === annotation.id
                       const isHovered = hoveredAnnotationId === annotation.id
                       return (
                         <button
                           key={annotation.id}
                           type="button"
-                          aria-label={`${displayCategory(annotation.category)} annotation${isExcluded ? ", excluded" : ""}`}
-                          className={`absolute overflow-visible border-2 text-left outline-none transition-[border-color,opacity,box-shadow] focus-visible:ring-2 focus-visible:ring-amber-300 ${isExcluded ? "border-dashed border-amber-500/80 bg-amber-300/10 opacity-65" : "border-emerald-400/90 bg-emerald-300/10"} ${isSelected ? "border-amber-400 bg-amber-300/25 opacity-100 shadow-[0_0_0_2px_rgba(255,255,255,0.9)]" : ""}`}
+                          aria-label={`${displayCategory(annotation.category)} annotation, ${isFilteredOut ? "filtered out" : isExcluded ? "manually excluded" : isAdded ? "added manually" : "included"}`}
+                          className={`absolute overflow-visible border-2 text-left outline-none transition-[border-color,background-color,opacity,box-shadow] focus-visible:ring-2 focus-visible:ring-amber-300 ${isFilteredOut ? "border-[3px] border-dashed border-slate-600 bg-slate-100/25 opacity-85 shadow-[0_0_0_1px_rgba(255,255,255,0.9),0_1px_3px_rgba(15,23,42,0.5)] hover:border-slate-900 hover:bg-slate-100/35 hover:opacity-100 hover:shadow-[0_0_0_2px_rgba(255,255,255,0.95),0_2px_6px_rgba(15,23,42,0.6)]" : isExcluded ? "border-dashed border-amber-500/80 bg-amber-300/10 opacity-65" : isAdded ? "border-sky-500/90 bg-sky-300/10" : "border-emerald-400/90 bg-emerald-300/10"} ${isSelected ? "border-amber-400 bg-amber-300/25 opacity-100 shadow-[0_0_0_2px_rgba(255,255,255,0.9)]" : ""}`}
                           style={{ left: `${(annotation.xCenter - annotation.width / 2) * 100}%`, top: `${(annotation.yCenter - annotation.height / 2) * 100}%`, width: `${annotation.width * 100}%`, height: `${annotation.height * 100}%`, zIndex: isSelected ? 30 : isHovered ? 20 : 10 }}
                           onMouseEnter={() => setHoveredAnnotationId(annotation.id)}
                           onMouseLeave={() => setHoveredAnnotationId(null)}
@@ -352,7 +374,7 @@ export function ImageDetailDrawer({
                             }
                           }}
                         >
-                          {isSelected || isHovered ? <span className={`absolute left-0 top-0 -translate-y-full whitespace-nowrap rounded px-1 py-0.5 text-[10px] font-semibold leading-none ${isExcluded ? "bg-amber-100 text-amber-900" : "bg-emerald-100 text-emerald-900"}`}>{displayCategory(annotation.category)}{isExcluded ? " · Excluded" : ""}</span> : null}
+                          {isSelected || isHovered ? <span className={`absolute left-0 top-0 -translate-y-full whitespace-nowrap rounded border px-1 py-0.5 text-[10px] font-bold leading-none shadow-sm ${isFilteredOut ? "border-slate-950/70 bg-slate-900/95 text-white" : isExcluded ? "border-amber-300 bg-amber-100 text-amber-900" : isAdded ? "border-sky-300 bg-sky-100 text-sky-900" : "border-emerald-300 bg-emerald-100 text-emerald-900"}`}>{displayCategory(annotation.category)} · {isFilteredOut ? "Filtered Out" : isExcluded ? "Excluded by User" : isAdded ? "Added Manually" : "Included"}</span> : null}
                         </button>
                       )
                     }) : null}
@@ -388,10 +410,15 @@ export function ImageDetailDrawer({
                   <div className="flex items-start justify-between gap-3">
                     <div>
                       <h3 id="annotations-title" className="text-sm font-semibold">Annotations</h3>
-                      <p className="mt-1 text-xs text-muted-foreground">{image.annotations.length} annotations · {excludedCount} excluded</p>
+                      <p className="mt-1 text-xs text-muted-foreground">{image.annotations.length} total · {matchingCount} matched · {manuallyAddedCount} added · {manuallyExcludedCount} excluded · {exportedCount} exported</p>
                     </div>
-                    <Button type="button" variant="ghost" size="sm" onClick={onRestoreAll} disabled={excludedCount === 0}>Restore All</Button>
+                    <Button type="button" variant="ghost" size="sm" onClick={onRestoreAll} disabled={manuallyExcludedCount === 0}>Restore All</Button>
                   </div>
+                  <div className="mt-3 grid grid-cols-2 rounded-md border p-0.5" aria-label="Annotation review mode">
+                    <Button type="button" variant={annotationReviewMode === "exported" ? "secondary" : "ghost"} size="xs" onClick={() => setAnnotationReviewMode("exported")}>Exported Only</Button>
+                    <Button type="button" variant={annotationReviewMode === "all" ? "secondary" : "ghost"} size="xs" onClick={() => setAnnotationReviewMode("all")}>Show All</Button>
+                  </div>
+                  <p className="mt-2 text-[11px] leading-4 text-muted-foreground">Filtered Out annotations do not match the active annotation filters and will not be exported unless manually included.</p>
                   {selectedAnnotation ? (
                     <div className="mt-3 rounded-lg border border-amber-300/70 bg-amber-50/70 p-3">
                       <div className="flex items-start justify-between gap-3">
@@ -407,43 +434,30 @@ export function ImageDetailDrawer({
                             Focus on Object
                           </Button>
                         </div>
-                        <Button
-                          type="button"
-                          variant={excludedAnnotationIds.has(selectedAnnotation.annotation.id) ? "secondary" : "default"}
-                          size="sm"
-                          onClick={() => onToggleAnnotation(selectedAnnotation.annotation.id)}
-                        >
-                          {excludedAnnotationIds.has(selectedAnnotation.annotation.id) ? "Restore Annotation" : "Exclude from Export"}
-                        </Button>
+                        {selectedAnnotation.state === "filtered-out" ? <Button type="button" size="sm" onClick={() => onToggleAnnotationOverride(selectedAnnotation.annotation.id, "included")}>Include in Export</Button> : <Button type="button" variant={selectedAnnotation.state === "manually-excluded" ? "secondary" : "default"} size="sm" onClick={() => onToggleAnnotationOverride(selectedAnnotation.annotation.id, selectedAnnotation.state === "manually-added" ? "included" : "excluded")}>{selectedAnnotation.state === "manually-excluded" ? "Restore Annotation" : selectedAnnotation.state === "manually-added" ? "Remove Manual Include" : "Exclude from Export"}</Button>}
                       </div>
                     </div>
                   ) : null}
                   <p className="mt-3 rounded-lg border bg-muted/30 px-3 py-2 text-xs text-muted-foreground">Excluded annotations affect only the exported dataset. The original dataset remains unchanged.</p>
-                  <div className="mt-4 overflow-hidden rounded-lg border">
-                    <table className="w-full text-left text-xs">
-                      <thead className="bg-muted/50 text-muted-foreground">
-                        <tr><th scope="col" className="px-3 py-2 font-medium">Category</th><th scope="col" className="px-3 py-2 text-right font-medium">Count</th></tr>
-                      </thead>
-                      <tbody className="divide-y">
-                        {image.annotationSummary.map(({ category, count }) => (
-                          <tr key={category}><td className="px-3 py-2">{displayCategory(category)}</td><td className="px-3 py-2 text-right font-medium">{count}</td></tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                  <div className="mt-4 min-h-0 flex-1 overflow-y-auto rounded-lg border">
+                  <details className="mt-3 text-xs text-muted-foreground">
+                    <summary className="cursor-pointer font-medium">Category Summary</summary>
+                    <p className="mt-1">{image.annotationSummary.map(({ category, count }) => `${displayCategory(category)} ${count}`).join(" · ")}</p>
+                  </details>
+                  <div className="mt-3 min-h-0 flex-1 overflow-y-auto rounded-lg border">
                     <div className="divide-y">
-                      {annotationsByCategory.map(({ annotation, number }) => {
-                        const isExcluded = excludedAnnotationIds.has(annotation.id)
+                      {visibleAnnotations.map(({ annotation, number, state }) => {
+                        const isExcluded = state === "manually-excluded"
+                        const isAdded = state === "manually-added"
+                        const isFilteredOut = state === "filtered-out"
                         const isActive = activeAnnotationId === annotation.id
                         return (
-                          <div key={annotation.id} ref={(element) => { if (element) annotationRowRefs.current.set(annotation.id, element); else annotationRowRefs.current.delete(annotation.id) }} className={`flex items-center gap-2 px-3 py-1.5 ${isActive ? "bg-amber-50" : "bg-card"}`} onMouseEnter={() => setHoveredAnnotationId(annotation.id)} onMouseLeave={() => setHoveredAnnotationId(null)}>
+                          <div key={annotation.id} ref={(element) => { if (element) annotationRowRefs.current.set(annotation.id, element); else annotationRowRefs.current.delete(annotation.id) }} className={`flex items-center gap-2 border-l-4 px-3 py-1.5 transition-colors ${isFilteredOut ? "border-transparent opacity-50" : "border-transparent"} ${isActive ? "border-l-amber-500 bg-amber-50 shadow-sm" : "bg-card hover:bg-muted/40"}`} onMouseEnter={() => setHoveredAnnotationId(annotation.id)} onMouseLeave={() => setHoveredAnnotationId(null)}>
                             <button type="button" className="min-w-0 flex-1 text-left outline-none focus-visible:ring-2 focus-visible:ring-ring" onFocus={() => setHoveredAnnotationId(annotation.id)} onBlur={() => setHoveredAnnotationId(null)} onClick={() => selectAnnotation(annotation.id)} onDoubleClick={() => { selectAnnotation(annotation.id); focusOnObject(annotation.id) }}>
                               <span className="block truncate text-sm font-medium">{displayCategory(annotation.category)} #{number}</span>
                               <span className="mt-0.5 block text-xs text-muted-foreground">{annotation.width.toFixed(2)} × {annotation.height.toFixed(2)} · area {formatArea(annotation.area)}</span>
                             </button>
-                            <span className={`text-xs font-semibold ${isExcluded ? "text-amber-700" : "text-emerald-700"}`}>{isExcluded ? "Excluded" : "Keep"}</span>
-                            <Button type="button" variant={isExcluded ? "secondary" : "outline"} size="icon-xs" aria-label={isExcluded ? `Restore ${displayCategory(annotation.category)} #${number}` : `Exclude ${displayCategory(annotation.category)} #${number} from export`} onClick={() => onToggleAnnotation(annotation.id)}>{isExcluded ? <Check aria-hidden="true" /> : <X aria-hidden="true" />}</Button>
+                            <span className={`text-xs font-semibold ${isFilteredOut ? "text-slate-600" : isExcluded ? "text-amber-700" : isAdded ? "text-sky-700" : "text-emerald-700"}`}>{isFilteredOut ? "Filtered Out" : isExcluded ? "Excluded by User" : isAdded ? "Added Manually" : "Included"}</span>
+                            {isFilteredOut ? <Button type="button" variant="outline" size="icon-xs" title="Include in Export" aria-label={`Include ${displayCategory(annotation.category)} #${number} in export`} className="cursor-pointer border-slate-300 transition-colors hover:border-sky-400 hover:bg-sky-50 hover:text-sky-700 focus-visible:border-sky-500 focus-visible:ring-sky-300" onClick={() => onToggleAnnotationOverride(annotation.id, "included")}>+</Button> : <Button type="button" variant={isExcluded ? "secondary" : "outline"} size="icon-xs" title={isExcluded ? "Restore Annotation" : isAdded ? "Remove Manual Include" : "Exclude from Export"} className="cursor-pointer transition-colors hover:border-foreground/30 hover:bg-muted focus-visible:ring-ring" aria-label={isExcluded ? `Restore ${displayCategory(annotation.category)} #${number}` : isAdded ? `Remove manual include for ${displayCategory(annotation.category)} #${number}` : `Exclude ${displayCategory(annotation.category)} #${number} from export`} onClick={() => onToggleAnnotationOverride(annotation.id, isAdded ? "included" : "excluded")}>{isExcluded ? <Check aria-hidden="true" /> : <X aria-hidden="true" />}</Button>}
                           </div>
                         )
                       })}

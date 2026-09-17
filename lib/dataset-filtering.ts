@@ -326,6 +326,39 @@ function matchesCategoryAndBoundingBoxConditions(
   });
 }
 
+export type FilterableAnnotation = Readonly<{
+  category: string;
+  width: number;
+  height: number;
+  area: number;
+  xCenter: number;
+  yCenter: number;
+}>;
+
+export function annotationMatchesFilters(
+  annotation: FilterableAnnotation,
+  filters: AnnotationLevelFilterState,
+) {
+  if (
+    filters.selectedAnnotationCategories.length > 0 &&
+    !filters.selectedAnnotationCategories.includes(
+      annotation.category as AnnotationCategory,
+    )
+  ) {
+    return false;
+  }
+
+  return getCompleteBoundingBoxConditions(
+    filters.boundingBoxConditions,
+  ).every((condition) =>
+    compareNumbers(
+      annotation[condition.field],
+      condition.operator,
+      condition.value,
+    ),
+  );
+}
+
 export function createEmptyDatasetFilters(): DatasetFilters {
   return {
     timeOfDay: "",
@@ -482,7 +515,7 @@ export function getActiveFilterChips(filters: DatasetFilters) {
     if (parseBoundingBoxValue(condition.value) !== null) {
       chips.push({
         id: boundingBoxChipId(field),
-        label: `BBox ${BOUNDING_BOX_FIELD_LABELS[field]} ${condition.operator} ${condition.value.trim()}`,
+        label: `${BOUNDING_BOX_FIELD_LABELS[field]} ${condition.operator} ${condition.value.trim()}`,
       });
     }
   }
