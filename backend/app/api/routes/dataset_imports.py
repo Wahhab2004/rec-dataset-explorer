@@ -1,14 +1,14 @@
 from typing import Annotated, Literal
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, File, Form, UploadFile
+from fastapi import APIRouter, BackgroundTasks, Depends, File, Form, UploadFile
 from fastapi.responses import JSONResponse
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, sessionmaker
 
 from app.db.session import get_db
 from app.models.import_job import ImportJob
 from app.schemas.dataset_import import ImportAcceptedResponse, ImportStatusResponse
-from app.services.dataset_import_service import create_import_job, save_and_validate_import
+from app.services.dataset_import_service import create_import_job, process_saved_import, save_import_upload
 from app.services.storage_service import StorageService, get_storage_service
 
 router = APIRouter(prefix="/dataset-imports", tags=["dataset-imports"])
@@ -21,6 +21,7 @@ def create_dataset_import(
     file: Annotated[UploadFile, File()],
     db: Annotated[Session, Depends(get_db)],
     storage: Annotated[StorageService, Depends(get_storage_service)],
+    background_tasks: BackgroundTasks,
     description: Annotated[str | None, Form()] = None,
 ) -> ImportAcceptedResponse:
     job = create_import_job(
@@ -30,8 +31,24 @@ def create_dataset_import(
         annotation_format=annotation_format,
         source_file_name=file.filename,
     )
-    save_and_validate_import(db, job, file.file, storage)
+    if save_import_upload(db, job, file.file, storage):
+        session_factory = sessionmaker(
+            bind=db.get_bind(),
+            class_=Session,
+            autoflush=False,
+            expire_on_commit=False,
+        )
+        background_tasks.add_task(_process_import_job, session_factory, job.id, storage)
     return ImportAcceptedResponse(importId=job.id, status="processing")
+
+
+def _process_import_job(
+    session_factory: sessionmaker[Session],
+    job_id: UUID,
+    storage: StorageService,
+) -> None:
+    with session_factory() as db:
+        process_saved_import(db, job_id, storage)
 
 
 @router.get("/{import_id}", response_model=ImportStatusResponse)

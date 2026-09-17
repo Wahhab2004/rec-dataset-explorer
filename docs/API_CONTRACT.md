@@ -271,11 +271,16 @@ The user is responsible for preparing the dataset correctly. The backend may val
 Possible stages:
 
 - `uploading`
-- `validating_structure`
+- `uploaded`
+- `validating`
 - `processing_images`
 - `processing_annotations`
-- `loading_metadata`
 - `creating_records`
+- `completed`
+
+The initial request streams the ZIP to temporary storage. Once the upload is
+stored, it returns `202`; validation and ingestion continue asynchronously and
+are reported by this status endpoint.
 
 #### Success response
 

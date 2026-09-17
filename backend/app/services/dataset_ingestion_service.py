@@ -41,7 +41,7 @@ def ingest_import_job(
             }
 
             job.stage = "creating_records"
-            job.progress = 10
+            job.progress = 35
             db.flush()
 
             dataset = Dataset(
@@ -71,6 +71,7 @@ def ingest_import_job(
             image_count = 0
             annotation_count = 0
             job.stage = "processing_images"
+            job.progress = 40
             for image_name in image_names:
                 file_name = PurePosixPath(image_name).name
                 metadata_entry = image_entries[file_name]
@@ -99,6 +100,7 @@ def ingest_import_job(
 
             db.flush()
             job.stage = "processing_annotations"
+            job.progress = 70
             for image_name in image_names:
                 file_name = PurePosixPath(image_name).name
                 label_name = _matching_label(label_names, image_name)
@@ -126,6 +128,7 @@ def ingest_import_job(
                     annotation_count += 1
 
             db.flush()
+            job.progress = 95
             now = datetime.now(timezone.utc)
             job.status = "completed"
             job.stage = "completed"

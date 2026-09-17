@@ -22,6 +22,7 @@ from app.models.dataset import Dataset
 from app.models.import_job import ImportJob
 from app.services.storage_service import StorageService, get_storage_service
 from app.services.dataset_ingestion_service import ingest_import_job
+from app.services.dataset_import_service import create_import_job, process_saved_import, save_import_upload
 from app.services.dataset_validation_service import validate_dataset_zip
 
 
@@ -114,6 +115,33 @@ def test_valid_structured_zip_is_validated(client: TestClient) -> None:
     search = client.post(f"/api/v1/datasets/{status.json()['datasetId']}/search", json={})
     assert search.status_code == 200
     assert search.json()["total"] == 1
+
+
+def test_stored_upload_is_processed_after_request_phase(
+    import_context: dict[str, object],
+) -> None:
+    session_local = import_context["SessionLocal"]
+    storage = import_context["storage"]
+    with session_local() as session:
+        job = create_import_job(
+            session,
+            name="Deferred Import",
+            description=None,
+            annotation_format="YOLO",
+            source_file_name="dataset.zip",
+        )
+        assert save_import_upload(session, job, make_zip(valid_files()), storage)
+        assert job.stage == "uploaded"
+        assert job.progress == 5
+        assert storage.import_source_path(job.id).is_file()
+        job_id = job.id
+
+    with session_local() as session:
+        completed_job = process_saved_import(session, job_id, storage)
+        assert completed_job is not None
+        assert completed_job.status == "completed"
+        assert completed_job.stage == "completed"
+        assert completed_job.progress == 100
 
 
 def test_completed_import_is_idempotent(

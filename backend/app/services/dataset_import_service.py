@@ -46,62 +46,64 @@ def create_import_job(
     return job
 
 
-def save_and_validate_import(
+def save_import_upload(
     db: Session,
     job: ImportJob,
     upload_stream: BinaryIO,
     storage: StorageService,
-) -> ImportJob:
+) -> bool:
     source_path = storage.import_source_path(job.id)
     source_path.parent.mkdir(parents=True, exist_ok=True)
     settings = get_settings()
 
     try:
         _save_upload(upload_stream, source_path, settings.max_upload_size_bytes)
-        if source_path.stat().st_size > settings.max_upload_size_bytes:
-            result = ValidationResult(
-                errors=[
-                    {
-                        "code": "ARCHIVE_TOO_LARGE",
-                        "message": f"Uploaded ZIP exceeds the configured maximum size of {_format_size(settings.max_upload_size_bytes)}",
-                    }
-                ],
-                image_count=0,
-                annotation_file_count=0,
-            )
-        else:
-            result = validate_dataset_zip(
-                str(source_path),
-                max_extracted_size_bytes=settings.max_extracted_size_bytes,
-                max_archive_entries=settings.max_archive_entries,
-            )
     except UploadTooLargeError:
-        result = ValidationResult(
-            errors=[
+        _fail_job(db, job, [
                 {
                     "code": "ARCHIVE_TOO_LARGE",
-                        "message": f"Uploaded ZIP exceeds the configured maximum size of {_format_size(settings.max_upload_size_bytes)}",
+                    "message": f"Uploaded ZIP exceeds the configured maximum size of {_format_size(settings.max_upload_size_bytes)}",
                 }
-            ],
-            image_count=0,
-            annotation_file_count=0,
-        )
+            ], "upload_failed")
+        return False
     except OSError:
-        result = ValidationResult(
-            errors=[
+        _fail_job(db, job, [
                 {
                     "code": "INVALID_ZIP",
                     "message": "Uploaded file could not be stored or read",
                 }
-            ],
-            image_count=0,
-            annotation_file_count=0,
-        )
+            ], "upload_failed")
+        return False
 
-    now = datetime.now(timezone.utc)
-    job.progress = 100
-    job.completed_at = now
-    job.updated_at = now
+    job.progress = 5
+    job.stage = "uploaded"
+    job.errors = None
+    job.updated_at = datetime.now(timezone.utc)
+    db.commit()
+    db.refresh(job)
+    return True
+
+
+def process_saved_import(
+    db: Session,
+    job_id: UUID,
+    storage: StorageService,
+) -> ImportJob | None:
+    job = db.get(ImportJob, job_id)
+    if job is None or job.status == "completed":
+        return job
+
+    settings = get_settings()
+    job.stage = "validating"
+    job.progress = 10
+    job.updated_at = datetime.now(timezone.utc)
+    db.commit()
+
+    result = validate_dataset_zip(
+        str(storage.import_source_path(job.id)),
+        max_extracted_size_bytes=settings.max_extracted_size_bytes,
+        max_archive_entries=settings.max_archive_entries,
+    )
     job.summary = {
         "images": result.image_count,
         "annotationFiles": result.annotation_file_count,
@@ -110,19 +112,34 @@ def save_and_validate_import(
     }
 
     if result.errors:
-        job.status = "failed"
-        job.stage = "validation_failed"
-        job.errors = result.errors
-    else:
-        job.status = "processing"
-        job.stage = "validated"
-        job.errors = None
+        _fail_job(db, job, result.errors, "validation_failed")
+        return job
 
+    job.status = "processing"
+    job.stage = "validated"
+    job.progress = 30
+    job.errors = None
+    job.updated_at = datetime.now(timezone.utc)
     db.commit()
     db.refresh(job)
-    if not result.errors:
-        return ingest_import_job(db, job, storage)
-    return job
+    return ingest_import_job(db, job, storage)
+
+
+def _fail_job(
+    db: Session,
+    job: ImportJob,
+    errors: list[dict[str, str]],
+    stage: str,
+) -> None:
+    now = datetime.now(timezone.utc)
+    job.status = "failed"
+    job.stage = stage
+    job.progress = 100
+    job.completed_at = now
+    job.updated_at = now
+    job.errors = errors
+    db.commit()
+    db.refresh(job)
 
 
 def _save_upload(

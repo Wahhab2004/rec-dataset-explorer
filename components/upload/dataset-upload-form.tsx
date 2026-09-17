@@ -17,6 +17,7 @@ import {
 } from "@/lib/api/dataset-imports";
 
 type UploadStage = "form" | "progress" | "success" | "error";
+type ImportPhase = "uploading" | "processing";
 
 function getApiError(error: unknown): ImportValidationError {
   if (error instanceof ApiError) {
@@ -34,6 +35,8 @@ export function DatasetUploadForm() {
   const [errors, setErrors] = useState<ImportValidationError[]>([]);
   const [importId, setImportId] = useState<string | null>(null);
   const [importStatus, setImportStatus] = useState<DatasetImportStatus | null>(null);
+  const [importPhase, setImportPhase] = useState<ImportPhase>("uploading");
+  const [uploadProgress, setUploadProgress] = useState(0);
 
   useEffect(() => {
     if (!importId || stage !== "progress") {
@@ -112,6 +115,8 @@ export function DatasetUploadForm() {
     setErrors([]);
     setImportStatus(null);
     setImportId(null);
+    setImportPhase("uploading");
+    setUploadProgress(0);
     setStage("progress");
 
     try {
@@ -120,7 +125,10 @@ export function DatasetUploadForm() {
         description: description.trim(),
         annotationFormat,
         file,
+        onUploadProgress: setUploadProgress,
       });
+      setUploadProgress(100);
+      setImportPhase("processing");
       setImportId(accepted.importId);
     } catch (error) {
       setErrors([getApiError(error)]);
@@ -135,14 +143,17 @@ export function DatasetUploadForm() {
     setErrors([]);
     setImportId(null);
     setImportStatus(null);
+    setImportPhase("uploading");
+    setUploadProgress(0);
     setStage("form");
   }
 
   if (stage === "progress") {
     return (
       <UploadProgress
-        progress={importStatus?.progress ?? 0}
-        stage={importStatus?.stage ?? "uploading"}
+        phase={importPhase}
+        progress={importPhase === "uploading" ? uploadProgress : importStatus?.progress ?? 5}
+        stage={importPhase === "uploading" ? "uploading" : importStatus?.stage ?? "uploaded"}
         processedImages={importStatus?.processedImages}
         totalImages={importStatus?.totalImages}
       />
